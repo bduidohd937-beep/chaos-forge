@@ -385,3 +385,103 @@ describe('V1.2.1 추첨 연출 복구', () => {
     expect(document.querySelector('#toast').textContent).toContain('생성 완료');
   });
 });
+
+
+describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
+  it('설정실, 생성실, 창작실, 보관함에 각 화면의 기능만 노출된다', () => {
+    setup();
+    expect(document.querySelector('[data-screen]').dataset.screen).toBe('chaos');
+    expect(document.querySelector('.results')).not.toBeNull();
+    expect(document.querySelector('#genreSelect')).toBeNull();
+
+    go('SETUP');
+    expect(document.querySelector('#genreSelect')).not.toBeNull();
+    expect(document.querySelector('.results')).toBeNull();
+    go('FORGE');
+    expect(document.querySelector('#forgeNotesInput')).not.toBeNull();
+    expect(document.querySelector('#customForm')).toBeNull();
+    go('LIBRARY');
+    expect(document.querySelector('#ideaList')).not.toBeNull();
+    expect(document.querySelector('#customForm')).not.toBeNull();
+  });
+
+  it('메인 장르 하나와 서브 장르 최대 3개를 자유롭게 선택한다', () => {
+    setup();
+    go('SETUP');
+    const tile = (name) => Array.from(document.querySelectorAll('.genre-tile'))
+      .find((node) => node.textContent.includes(name));
+    ['로맨스', '미스터리', '코미디'].forEach(name => click(tile(name)));
+    expect(document.querySelectorAll('.genre-tile.selected')).toHaveLength(3);
+    expect(tile('공포').disabled).toBe(true);
+    click(tile('미스터리'));
+    expect(document.querySelectorAll('.genre-tile.selected')).toHaveLength(2);
+    expect(tile('공포').disabled).toBe(false);
+
+    fireEvent.change(document.querySelector('#genreSelect'), { target: { value: '로' } });
+    expect(document.querySelectorAll('.genre-tile.selected')).toHaveLength(1);
+    expect(Storage.loadDraft().genreSelection).toEqual({ main: '로', subs: ['코'] });
+  });
+
+  it('통합 장르 선택 및 설정 상태가 생성실과 새 세션에 유지된다', () => {
+    const first = setup();
+    go('SETUP');
+    fireEvent.change(document.querySelector('#genreSelect'), { target: { value: 'SF' } });
+    const chip = Array.from(document.querySelectorAll('.genre-tile'))
+      .find(node => node.textContent.includes('로맨스'));
+    click(chip);
+    click(screen.getByRole('button', { name: /이 설정으로 창조하기/ }));
+    expect(document.querySelector('.chaos-formula').textContent).toContain('SF');
+    expect(document.querySelector('.chaos-formula').textContent).toContain('로맨스');
+    expect(Storage.loadDraft().genreSelection).toEqual({ main: 'SF', subs: ['로'] });
+    first.unmount();
+
+    render(<App animationMs={0} />);
+    expect(document.querySelector('[data-screen]').dataset.screen).toBe('chaos');
+    expect(document.querySelector('.chaos-formula').textContent).toContain('로맨스');
+  });
+
+  it('FORGE의 제목·메모는 추첨 결과와 독립적으로 자동 저장된다', () => {
+    const first = setup();
+    go('FORGE');
+    fireEvent.change(document.querySelector('#forgeTitleInput'), { target: { value: '별의 탐정' } });
+    fireEvent.change(document.querySelector('#forgeNotesInput'), { target: { value: '첫 장면은 왕궁에서 시작한다.' } });
+    expect(Storage.loadDraft().forgeDocs.story).toEqual({
+      title: '별의 탐정', notes: '첫 장면은 왕궁에서 시작한다.'
+    });
+    first.unmount();
+
+    render(<App animationMs={0} />);
+    expect(document.querySelector('#forgeTitleInput').value).toBe('별의 탐정');
+    expect(document.querySelector('#forgeNotesInput').value).toContain('왕궁');
+  });
+
+  it('기존 V1 장르·잠금 초안을 손실 없이 불러온다', () => {
+    Storage.saveDraft({
+      generatorId: 'story', genre: '판', mode: 'hybrid', chaos: 3,
+      results: { story: { values: { setting: '이전 버전의 마법 학교' }, locks: { setting: true } } }
+    });
+    setup();
+    const card = document.querySelector('[data-slot="setting"].result-card');
+    expect(card.querySelector('.card-value').textContent).toBe('이전 버전의 마법 학교');
+    expect(card.classList.contains('is-locked')).toBe(true);
+    expect(Storage.loadDraft().genreSelection).toEqual({ main: '판', subs: [] });
+  });
+
+  it('아이디어 저장과 불러오기에서 서브 장르도 복원된다', () => {
+    setup();
+    go('SETUP');
+    fireEvent.change(document.querySelector('#genreSelect'), { target: { value: '판' } });
+    const romance = Array.from(document.querySelectorAll('.genre-tile'))
+      .find(node => node.textContent.includes('로맨스'));
+    click(romance);
+    go('CHAOS');
+    click(document.querySelector('#saveBtn'));
+    expect(Storage.loadIdeas()[0].genres).toEqual({ main: '판', subs: ['로'] });
+    go('SETUP');
+    fireEvent.change(document.querySelector('#genreSelect'), { target: { value: 'SF' } });
+    go('LIBRARY');
+    click(screen.getByRole('button', { name: '불러오기' }));
+    expect(document.querySelector('[data-screen]').dataset.screen).toBe('chaos');
+    expect(document.querySelector('.chaos-formula').textContent).toContain('로맨스');
+  });
+});
