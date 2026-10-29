@@ -11,6 +11,10 @@ function setup() {
 }
 
 const click = (node) => fireEvent.click(node);
+const libraryView = (name) => {
+  const tab = screen.getByRole('tab', { name: new RegExp(name) });
+  click(tab);
+};
 const go = (page) => {
   const button = Array.from(document.querySelectorAll('.workspace-tab'))
     .find((node) => node.textContent.includes(page));
@@ -157,6 +161,7 @@ describe('CHAOS FORGE UI', () => {
   it('사용자 키워드를 추가하면 생성 결과에 등장한다', () => {
     const { cards } = setup();
     go('LIBRARY');
+    libraryView('사용자 키워드');
 
     fireEvent.change(document.querySelector('#customGenerator'), { target: { value: 'story' } });
     fireEvent.change(document.querySelector('#customSlot'), { target: { value: 'setting' } });
@@ -186,6 +191,7 @@ describe('CHAOS FORGE UI', () => {
     fireEvent.change(document.querySelector('#ideaTitle'), { target: { value: '유지 테스트' } });
     click(document.querySelector('#saveBtn'));
     go('LIBRARY');
+    libraryView('사용자 키워드');
 
     fireEvent.change(document.querySelector('#customText'), { target: { value: '새 키워드' } });
     fireEvent.submit(document.querySelector('#customForm'));
@@ -193,8 +199,10 @@ describe('CHAOS FORGE UI', () => {
     cleanup();
     render(<App animationMs={0} />);
 
+    // 보관함은 목록을 한 번에 쌓지 않고 카테고리별로만 표시한다.
     expect(document.querySelector('#ideaCount').textContent).toBe('1');
     expect(document.querySelector('#ideaList').textContent).toContain('유지 테스트');
+    libraryView('사용자 키워드');
     expect(document.querySelector('#customCount').textContent).toBe('1');
   });
 
@@ -402,7 +410,10 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
     expect(document.querySelector('#customForm')).toBeNull();
     go('LIBRARY');
     expect(document.querySelector('#ideaList')).not.toBeNull();
+    expect(document.querySelector('#customForm')).toBeNull();
+    libraryView('사용자 키워드');
     expect(document.querySelector('#customForm')).not.toBeNull();
+    expect(document.querySelector('#ideaList')).toBeNull();
   });
 
   it('메인 장르 하나와 서브 장르 최대 3개를 자유롭게 선택한다', () => {
@@ -548,5 +559,76 @@ describe('V2.0 Alpha 추첨 연출 체감 속도 회귀 검증', () => {
     click(document.querySelector('#generateBtn'));
     expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
     expect(document.querySelector('#generateBtn').getAttribute('aria-busy')).toBe('false');
+  });
+});
+
+
+describe('V2.0 Alpha 가독성·화면 구성 검수', () => {
+  it('새 화면 진입 시 스크롤을 초기화하여 고정 헤더에 제목이 가려지지 않도록 한다', () => {
+    const spy = vi.fn();
+    window.scrollTo = spy;
+    setup();
+    spy.mockClear();
+    go('SETUP');
+    expect(spy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
+    go('CHAOS');
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('설정실은 추천 장르부터 보여주며 전체 펼치기 및 검색을 지원한다', () => {
+    setup();
+    go('SETUP');
+    const list = () => Array.from(document.querySelectorAll('.genre-tile'));
+    const initialCount = list().length;
+    expect(initialCount).toBeGreaterThan(5);
+    expect(initialCount).toBeLessThan(24);
+    click(screen.getByRole('button', { name: /전체 장르 보기/ }));
+    expect(list()).toHaveLength(24);
+    fireEvent.change(document.querySelector('#subGenreSearch'), { target: { value: '스팀펑크' } });
+    expect(list()).toHaveLength(1);
+    expect(list()[0].textContent).toContain('스팀펑크');
+    fireEvent.change(document.querySelector('#subGenreSearch'), { target: { value: '없는장르' } });
+    expect(document.querySelector('.setup-genre-empty').textContent).toContain('다른 이름');
+  });
+
+  it('추천에 없는 장르도 최대 세 개까지 선택하고 검색 결과에 잠금 상태를 표시한다', () => {
+    setup();
+    go('SETUP');
+    const search = document.querySelector('#subGenreSearch');
+    fireEvent.change(search, { target: { value: '스팀펑크' } });
+    const tile = document.querySelector('.genre-tile');
+    click(tile);
+    expect(tile.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('.setup-picked').textContent).toContain('스팀펑크');
+    fireEvent.change(search, { target: { value: '' } });
+    expect(Array.from(document.querySelectorAll('.genre-tile')).some(
+      item => item.textContent.includes('스팀펑크')
+    )).toBe(true);
+  });
+
+  it('생성실에서 주된 추첨 버튼·연출 선택·결과 제목을 명확히 구분한다', () => {
+    setup();
+    expect(document.querySelector('.chaos-primary-actions #generateBtn')).not.toBeNull();
+    expect(document.querySelector('.chaos-deck-options .reel-presets')).not.toBeNull();
+    expect(document.querySelector('.chaos-result-heading').textContent).toContain('추첨 결과');
+    expect(document.querySelectorAll('.result-card')).toHaveLength(8);
+  });
+
+  it('카드별 잠금 및 재추첨에는 키워드 항목 이름이 포함된 접근성 이름이 있다', () => {
+    setup();
+    expect(screen.getByRole('button', { name: '배경 잠그기' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: '배경 다시 뽑기' })).not.toBeNull();
+    click(screen.getByRole('button', { name: '배경 잠그기' }));
+    expect(screen.getByRole('button', { name: '배경 잠금 해제' })).not.toBeNull();
+  });
+
+  it('보관함은 아이디어와 키워드 양쪽 패널을 동시에 복잡하게 펼치지 않는다', () => {
+    setup();
+    go('LIBRARY');
+    expect(screen.getByRole('tab', { name: /저장된 아이디어/ }).getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('#customForm')).toBeNull();
+    libraryView('사용자 키워드');
+    expect(screen.getByRole('tab', { name: /사용자 키워드/ }).getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('#ideaList')).toBeNull();
   });
 });
