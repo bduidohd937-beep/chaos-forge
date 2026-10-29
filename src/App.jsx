@@ -28,6 +28,7 @@ const CHAOS_HINTS = {
 
 const SPIN_STEP = 70;
 const STAGGER = 110;
+const REEL_STYLES = ['classic', 'slot', 'instant'];
 
 // 접근성: 움직임 최소화 설정에서는 슬롯 연출을 생략한다.
 const motionAllowed = () =>
@@ -98,6 +99,13 @@ export default function App({ animationMs = 620 }) {
     return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
   });
   const [draftSaved, setDraftSaved] = useState(true);
+  const [reelStyle, setReelStyle] = useState(() =>
+    REEL_STYLES.includes(draft?.reelStyle)
+      ? draft.reelStyle
+      : (motionAllowed() ? 'classic' : 'instant')
+  );
+  const [activeSpinStyle, setActiveSpinStyle] = useState('classic');
+  const [settled, setSettled] = useState({});
   const [spinning, setSpinning] = useState({});
   const [spinText, setSpinText] = useState({});
   const [toast, setToast] = useState('');
@@ -121,9 +129,9 @@ export default function App({ animationMs = 620 }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
-    const ok = Storage.saveDraft({ generatorId, mode, genre, chaos, results });
+    const ok = Storage.saveDraft({ generatorId, mode, genre, chaos, results, reelStyle });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, chaos, results]);
+  }, [generatorId, mode, genre, chaos, results, reelStyle]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -139,6 +147,7 @@ export default function App({ animationMs = 620 }) {
     stopRef.current.forEach(clearTimeout);
     stopRef.current = [];
     setSpinning({});
+    setSettled({});
   }, []);
 
   useEffect(
@@ -181,49 +190,75 @@ export default function App({ animationMs = 620 }) {
         .filter((slot) => !snapshot.locks[slot.key])
         .map((slot) => slot.key);
 
-      if (animationMs > 0 && motionAllowed() && unlocked.length > 0) {
+      const isSlot = reelStyle === 'slot' || options.overdrive === true;
+      const animated = reelStyle !== 'instant' && animationMs > 0 &&
+        motionAllowed() && unlocked.length > 0;
+      setActiveSpinStyle(isSlot ? 'slot' : 'classic');
+      const completion = `${target.title} 생성 완료 · ${modeName(nextMode)}` +
+        (nextMode === 'hybrid' ? ` (혼돈 ${nextChaos})` : '');
+
+      if (animated) {
         const pools = {};
         for (const key of unlocked) pools[key] = getPool(gid, key, custom);
 
-        setSpinText(finalValues);
+        // 정답을 0.07초 먼저 보여 주지 않고 이전 결과부터 슬롯을 돌린다.
+        setSpinText({ ...snapshot.values });
         setSpinning(Object.fromEntries(unlocked.map((key) => [key, true])));
 
+        const baseMs = isSlot ? Math.max(760, animationMs) : animationMs;
+        const staggerMs = isSlot ? 160 : STAGGER;
+        const tickMs = isSlot ? 52 : SPIN_STEP;
+        const start = Date.now();
+        const finished = new Set();
+        let frame = 0;
+
         tickRef.current = setInterval(() => {
+          frame += 1;
+          const elapsed = Date.now() - start;
           setSpinText((prev) => {
             const next = { ...prev };
-            for (const key of unlocked) {
+            unlocked.forEach((key, index) => {
+              if (finished.has(key)) return;
               const pool = pools[key];
-              if (pool && pool.length) next[key] = pool[Math.floor(Math.random() * pool.length)].t;
-            }
+              if (!pool?.length) return;
+              const remaining = baseMs + index * staggerMs - elapsed;
+              // 슬롯 연출: 처음엔 빠르게, 끝날수록 느리게.
+              if (isSlot && remaining < 230 && frame % 3 !== 0) return;
+              if (isSlot && remaining >= 230 && remaining < 430 && frame % 2 !== 0) return;
+              next[key] = pool[Math.floor(Math.random() * pool.length)].t;
+            });
             return next;
           });
-        }, SPIN_STEP);
+        }, tickMs);
 
         unlocked.forEach((key, index) => {
           const timer = setTimeout(() => {
+            finished.add(key);
             setSpinText((prev) => ({ ...prev, [key]: finalValues[key] }));
             setSpinning((prev) => {
               const next = { ...prev };
               delete next[key];
               return next;
             });
-            if (index === unlocked.length - 1 && tickRef.current) {
-              clearInterval(tickRef.current);
-              tickRef.current = null;
+            if (isSlot) setSettled((prev) => ({ ...prev, [key]: true }));
+            if (index === unlocked.length - 1) {
+              if (tickRef.current) {
+                clearInterval(tickRef.current);
+                tickRef.current = null;
+              }
+              if (!options.silent) showToast(completion);
+              const clear = setTimeout(() => setSettled({}), 550);
+              stopRef.current.push(clear);
             }
-          }, animationMs + index * STAGGER);
+          }, baseMs + index * staggerMs);
           stopRef.current.push(timer);
         });
-      }
-
-      if (!options.silent) {
-        showToast(
-          `${target.title} 생성 완료 · ${modeName(nextMode)}` +
-            (nextMode === 'hybrid' ? ` (혼돈 ${nextChaos})` : '')
-        );
+        if (!options.silent) showToast('◈ 키워드 추첨 중…');
+      } else if (!options.silent) {
+        showToast(completion);
       }
     },
-    [generatorId, mode, genre, chaos, results, custom, animationMs, clearAnimations, showToast]
+    [generatorId, mode, genre, chaos, results, custom, reelStyle, animationMs, clearAnimations, showToast]
   );
 
   const reroll = (slotKey) => {
@@ -241,23 +276,37 @@ export default function App({ animationMs = 620 }) {
     }));
 
     clearAnimations();
-    if (animationMs <= 0 || !motionAllowed()) return;
+    const isSlot = reelStyle === 'slot';
+    setActiveSpinStyle(isSlot ? 'slot' : 'classic');
+    if (animationMs <= 0 || reelStyle === 'instant' || !motionAllowed()) return;
 
     const pool = getPool(generatorId, slotKey, custom);
-    const duration = Math.max(260, animationMs * 0.6);
+    const duration = isSlot ? Math.max(520, animationMs * 0.8) : Math.max(260, animationMs * 0.6);
+    const cadence = isSlot ? 52 : SPIN_STEP;
+    const start = Date.now();
+    let frame = 0;
     setSpinning({ [slotKey]: true });
-    setSpinText((prev) => ({ ...prev, [slotKey]: text }));
+    setSpinText((prev) => ({ ...prev, [slotKey]: current.values[slotKey] ?? '' }));
 
     tickRef.current = setInterval(() => {
+      frame++;
+      const remaining = duration - (Date.now() - start);
+      if (isSlot && remaining < 180 && frame % 3 !== 0) return;
+      if (isSlot && remaining >= 180 && remaining < 300 && frame % 2 !== 0) return;
       setSpinText((prev) => ({
         ...prev,
         [slotKey]: pool.length ? pool[Math.floor(Math.random() * pool.length)].t : text
       }));
-    }, SPIN_STEP);
+    }, cadence);
 
     const timer = setTimeout(() => {
       setSpinText((prev) => ({ ...prev, [slotKey]: text }));
       setSpinning({});
+      if (isSlot) {
+        setSettled({ [slotKey]: true });
+        const clear = setTimeout(() => setSettled({}), 550);
+        stopRef.current.push(clear);
+      }
       if (tickRef.current) {
         clearInterval(tickRef.current);
         tickRef.current = null;
@@ -328,7 +377,7 @@ export default function App({ animationMs = 620 }) {
     }
     setMode('hybrid');
     setChaos(5);
-    generate({ mode: 'hybrid', chaos: 5 });
+    generate({ mode: 'hybrid', chaos: 5 }, { overdrive: true });
   };
 
   const buildText = () => {
@@ -498,7 +547,7 @@ export default function App({ animationMs = 620 }) {
           </span>
           <div className="brand-text">
             <h1>CHAOS FORGE</h1>
-            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.2</p>
+            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.2.1</p>
           </div>
         </div>
 
@@ -522,6 +571,22 @@ export default function App({ animationMs = 620 }) {
       <main className="wrap">
         <div className="workspace-bar" aria-label="작업 상태">
           <span className="workspace-name">◈ CHAOS MODE <span>발견하고, 고정하고, 다듬기</span></span>
+          <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
+            <span className="reel-presets-label">연출</span>
+            {[
+              ['classic', '클래식'],
+              ['slot', '슬롯'],
+              ['instant', '즉시']
+            ].map(([key, label]) => (
+              <button key={key} type="button" className="reel-preset"
+                aria-pressed={reelStyle === key}
+                onClick={() => {
+                  clearAnimations();
+                  setReelStyle(key);
+                }}
+              >{label}</button>
+            ))}
+          </div>
           <span className={`autosave-status${draftSaved ? '' : ' is-error'}`} role="status">
             {draftSaved ? '● 초안 자동 저장됨' : '⚠ 자동 저장 실패 · JSON 백업 권장'}
           </span>
@@ -553,7 +618,8 @@ export default function App({ animationMs = 620 }) {
             ? `키워드 조합 중 · ${Object.keys(spinning).length}개 슬롯 회전`
             : `${gen.title} · ${lockedCount}개 고정 / ${gen.slots.length}개 항목`}
         </div>
-        <section className="results" id="results" aria-live="off" aria-label="생성 결과">
+        <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
+          id="results" aria-live="off" aria-label="생성 결과">
           {gen.slots.map((slot) => {
             const isSpinning = Boolean(spinning[slot.key]);
             const value = isSpinning
@@ -568,6 +634,7 @@ export default function App({ animationMs = 620 }) {
                 value={value}
                 locked={Boolean(current.locks[slot.key])}
                 spinning={isSpinning}
+                settled={Boolean(settled[slot.key])}
                 onChange={(text) => updateValue(slot.key, text)}
                 onLock={() => toggleLock(slot.key)}
                 onReroll={() => reroll(slot.key)}
@@ -634,7 +701,7 @@ export default function App({ animationMs = 620 }) {
       </main>
 
       <footer className="site-footer">
-        <p>CHAOS FORGE v1.2 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
+        <p>CHAOS FORGE v1.2.1 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
       </footer>
 
       <div className={`toast${toast ? ' is-show' : ''}`} id="toast" role="status" aria-live="polite">

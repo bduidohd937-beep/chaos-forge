@@ -26,6 +26,7 @@ export default function ResultCard({
   value,
   locked,
   spinning,
+  settled = false,
   onChange,
   onLock,
   onReroll
@@ -40,13 +41,14 @@ export default function ResultCard({
   return (
     <article
       className={
-        'result-card' + (locked ? ' is-locked' : '') + (spinning ? ' is-spinning' : '')
+        'result-card' + (locked ? ' is-locked' : '') + (spinning ? ' is-spinning' : '') + (settled ? ' is-settled' : '')
       }
       data-slot={slotKey}
     >
       <div className="card-head">
         <span className="card-label">{label}</span>
         {spinning && <span className="reel-indicator" aria-hidden="true">ROLLING</span>}
+        {settled && !spinning && <span className="reel-indicator is-done" aria-hidden="true">✦ 결정!</span>}
         <div className="card-tools">
           <button
             type="button"
