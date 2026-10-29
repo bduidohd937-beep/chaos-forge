@@ -83,7 +83,17 @@ function nextRecentHistory(previous, generatorId, previousValues, nextValues, lo
     const key = slot.key;
     const values = [...(old[key] || []), previousValues?.[key], nextValues?.[key]]
       .filter((item) => typeof item === 'string' && item.trim());
-    updated[key] = values.slice(-4);
+    // A fresh roll repeats the old value as its previous value. Keep the
+    // most recent occurrence only so the four-slot history stays meaningful.
+    const uniqueNewestFirst = [];
+    const seen = new Set();
+    for (const value of values.reverse()) {
+      const normalized = value.trim().toLocaleLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      uniqueNewestFirst.push(value);
+    }
+    updated[key] = uniqueNewestFirst.reverse().slice(-4);
   }
   return { ...previous, [generatorId]: updated };
 }
