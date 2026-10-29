@@ -556,182 +556,204 @@ export default function App({ animationMs = 620 }) {
     showToast('키워드를 삭제했습니다');
   };
 
+  const pages = [
+    { id: 'setup', en: 'SETUP', ko: '설정실' },
+    { id: 'chaos', en: 'CHAOS', ko: '생성실' },
+    { id: 'forge', en: 'FORGE', ko: '창작실' },
+    { id: 'library', en: 'LIBRARY', ko: '보관함' }
+  ];
+  const selectedGenreNames = [genre, ...subgenres].map(
+    (key) => ALL_GENRES.find((item) => item.k === key)?.n || key
+  );
+
   return (
     <>
-      <header className="site-header">
+      <header className="site-header v2-header">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="34" height="34" fill="none">
-              <path
-                d="M16 2l4.6 9.3L30 12.8l-7 6.8 1.7 9.6L16 24.4 7.3 29.2 9 19.6 2 12.8l9.4-1.5L16 2z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
+          <span className="brand-mark" aria-hidden="true">✦</span>
           <div className="brand-text">
             <h1>CHAOS FORGE</h1>
-            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.2.1</p>
+            <p>CREATE THE IMPOSSIBLE · PROJECT REFORGE</p>
           </div>
+          <span className="v2-beta">V2.0 ALPHA</span>
         </div>
-
-        <nav className="tabs" id="generatorTabs" role="tablist" aria-label="생성기 선택">
-          {GENERATORS.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className="tab"
-              role="tab"
-              aria-selected={g.id === generatorId}
-              title={`${g.title} — ${g.desc}`}
-              onClick={() => switchGenerator(g.id)}
-            >
-              {g.tab}
+        <nav className="workspace-nav" aria-label="창작 공간 이동">
+          {pages.map((page, index) => (
+            <button type="button" key={page.id}
+              className={`workspace-tab${page.id === workspacePage ? ' selected' : ''}`}
+              aria-current={workspacePage === page.id ? 'page' : undefined}
+              onClick={() => { clearAnimations(); setWorkspacePage(page.id); }}>
+              <small>{String(index + 1).padStart(2, '0')}</small>
+              <strong>{page.en}</strong>
+              <span>{page.ko}</span>
             </button>
           ))}
         </nav>
       </header>
 
-      <main className="wrap">
-        <div className="workspace-bar" aria-label="작업 상태">
-          <span className="workspace-name">◈ CHAOS MODE <span>발견하고, 고정하고, 다듬기</span></span>
-          <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
-            <span className="reel-presets-label">연출</span>
-            {[
-              ['classic', '클래식'],
-              ['slot', '슬롯'],
-              ['instant', '즉시']
-            ].map(([key, label]) => (
-              <button key={key} type="button" className="reel-preset"
-                aria-pressed={reelStyle === key}
-                onClick={() => {
-                  clearAnimations();
-                  setReelStyle(key);
-                }}
-              >{label}</button>
-            ))}
-          </div>
+      <main className="wrap v2-wrap" data-screen={workspacePage}>
+        <div className="v2-statusbar">
+          <span>✦ 현재 작업 · {gen.title} <em>{selectedGenreNames.join(' × ')}</em></span>
           <span className={`autosave-status${draftSaved ? '' : ' is-error'}`} role="status">
-            {draftSaved ? '● 초안 자동 저장됨' : '⚠ 자동 저장 실패 · JSON 백업 권장'}
+            {draftSaved ? '● 이 브라우저에 자동 저장됨' : '⚠ 자동 저장 실패 · JSON 백업 권장'}
           </span>
         </div>
-        <ControlsBar
-          genres={gen.genreList}
-          genre={genre}
-          onGenreChange={changeGenre}
-          mode={mode}
-          onModeChange={changeMode}
-          chaos={chaos}
-          chaosHint={
-            mode === 'hybrid'
-              ? CHAOS_HINTS[chaos]
-              : mode === 'genre'
-                ? '선택한 장르와 어울리는 키워드만 등장합니다.'
-                : '장르 제약 없이 모든 키워드가 동일 확률로 섞입니다.'
-          }
-          onChaosChange={setChaos}
-          onChaosCommit={commitChaos}
-          onGenerate={() => generate()}
-          onOverdrive={overdrive}
-          onUnlockAll={unlockAll}
-        />
 
-        <div className="reel-status" role="status" aria-live="polite">
-          <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
-          {isRolling
-            ? `키워드 조합 중 · ${Object.keys(spinning).length}개 슬롯 회전`
-            : `${gen.title} · ${lockedCount}개 고정 / ${gen.slots.length}개 항목`}
-        </div>
-        <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
-          id="results" aria-live="off" aria-label="생성 결과">
-          {gen.slots.map((slot) => {
-            const isSpinning = Boolean(spinning[slot.key]);
-            const value = isSpinning
-              ? spinText[slot.key] ?? current.values[slot.key] ?? ''
-              : current.values[slot.key] ?? '';
-
-            return (
-              <ResultCard
-                key={`${gen.id}-${slot.key}`}
-                slotKey={slot.key}
-                label={slot.label}
-                value={value}
-                locked={Boolean(current.locks[slot.key])}
-                spinning={isSpinning}
-                settled={Boolean(settled[slot.key])}
-                onChange={(text) => updateValue(slot.key, text)}
-                onLock={() => toggleLock(slot.key)}
-                onReroll={() => reroll(slot.key)}
-              />
-            );
-          })}
-        </section>
-
-        <ConceptPreview
-          preview={preview}
-          isRolling={isRolling}
-          lockedCount={lockedCount}
-          totalCount={gen.slots.length}
-          onCopy={copyConcept}
-        />
-
-        <section className="result-actions">
-          <button type="button" className="btn btn-outline" id="copyBtn" onClick={copy}>
-            결과 복사
-          </button>
-          <div className="export-group">
-            <button
-              type="button"
-              className="btn btn-outline"
-              id="exportMdBtn"
-              onClick={() => exportResult('md')}
-            >
-              MD 저장
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline"
-              id="exportJsonBtn"
-              onClick={() => exportResult('json')}
-            >
-              JSON 저장
-            </button>
-          </div>
-          <input
-            type="text"
-            id="ideaTitle"
-            className="input input-inline"
-            placeholder="저장할 제목 (선택)"
-            maxLength={60}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+        {workspacePage === 'setup' && (
+          <SetupScreen
+            generatorId={generatorId}
+            onGeneratorChange={switchGenerator}
+            mainGenre={genre}
+            subgenres={subgenres}
+            onMainChange={changeGenre}
+            onSubChange={toggleSubgenre}
+            mode={mode}
+            onModeChange={changeMode}
+            chaos={chaos}
+            onChaosChange={setChaos}
+            onBegin={beginCreation}
           />
-          <button type="button" className="btn btn-accent" id="saveBtn" onClick={saveIdea}>
-            아이디어 저장
-          </button>
-        </section>
+        )}
 
-        <div className="panels">
-          <IdeasPanel
-            ideas={filteredIdeas}
-            total={ideas.length}
-            search={search}
-            onSearch={setSearch}
-            onLoad={loadIdea}
-            onDelete={deleteIdea}
-          />
-          <CustomPanel custom={custom} onAdd={addCustom} onDelete={deleteCustom} />
-        </div>
+        {workspacePage === 'chaos' && (
+          <section className="v2-screen chaos-screen" aria-labelledby="chaosTitle">
+            <div className="v2-intro chaos-intro">
+              <p className="v2-kicker">02 / CHAOS — THE RANDOM CHAMBER</p>
+              <h2 id="chaosTitle">가능성을 추첨하세요.</h2>
+              <p>마음에 드는 설정은 잠그고, 나머지는 원하는 만큼 다시 뽑으세요.</p>
+            </div>
+
+            <div className="chaos-toolbar">
+              <nav className="tabs" id="generatorTabs" role="tablist" aria-label="생성기 선택">
+                {GENERATORS.map((g) => (
+                  <button type="button" key={g.id} className="tab" role="tab"
+                    aria-selected={g.id === generatorId}
+                    title={`${g.title} — ${g.desc}`}
+                    onClick={() => switchGenerator(g.id)}>
+                    {g.tab}
+                  </button>
+                ))}
+              </nav>
+              <button type="button" className="v2-edit-setup" onClick={() => setWorkspacePage('setup')}>
+                설정 편집 ↗
+              </button>
+            </div>
+
+            <div className="chaos-formula" aria-label="현재 장르 설정">
+              {selectedGenreNames.map((name, i) => (
+                <span key={i} className={`chaos-genre-pill${i === 0 ? ' main' : ''}`}>
+                  {i === 0 ? '♛ ' : '+ '}{name}
+                </span>
+              ))}
+              <span className="chaos-meta">· {modeName(mode)}{mode === 'hybrid' ? ` · 혼돈 ${chaos}/5` : ''}</span>
+            </div>
+
+            <div className="chaos-control-deck">
+              <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
+                <span className="reel-presets-label">연출</span>
+                {[
+                  ['slot', '슬롯'],
+                  ['classic', '클래식'],
+                  ['instant', '즉시']
+                ].map(([key, label]) => (
+                  <button type="button" key={key} className="reel-preset"
+                    aria-pressed={reelStyle === key}
+                    onClick={() => { clearAnimations(); setReelStyle(key); }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="chaos-primary-actions">
+                <button type="button" className="btn btn-primary v2-generate" id="generateBtn"
+                  onClick={() => generate()}>◈ 전체 추첨</button>
+                <button type="button" className="btn btn-overdrive" id="overdriveBtn"
+                  title="설정을 바꾸지 않고 이번 추첨에만 혼돈 5 적용"
+                  onClick={overdrive}>⚡ 폭주 추첨</button>
+                <button type="button" className="btn btn-ghost" id="unlockAllBtn"
+                  onClick={unlockAll}>잠금 해제</button>
+              </div>
+            </div>
+
+            <div className="reel-status" role="status" aria-live="polite">
+              <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
+              {isRolling
+                ? `키워드 추첨 중 · ${Object.keys(spinning).length}개 카드 회전`
+                : `${lockedCount}개 고정 · ${gen.slots.length - lockedCount}개 재추첨 가능`}
+            </div>
+            <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
+              id="results" aria-live="off" aria-label="생성 결과">
+              {gen.slots.map((slot) => {
+                const isSpinning = Boolean(spinning[slot.key]);
+                const value = isSpinning
+                  ? spinText[slot.key] ?? current.values[slot.key] ?? ''
+                  : current.values[slot.key] ?? '';
+                return (
+                  <ResultCard key={`${gen.id}-${slot.key}`} slotKey={slot.key}
+                    label={slot.label} value={value} locked={Boolean(current.locks[slot.key])}
+                    spinning={isSpinning} settled={Boolean(settled[slot.key])}
+                    onChange={(text) => updateValue(slot.key, text)}
+                    onLock={() => toggleLock(slot.key)}
+                    onReroll={() => reroll(slot.key)}
+                  />
+                );
+              })}
+            </section>
+
+            <div className="chaos-after-actions">
+              <button type="button" className="btn btn-accent v2-forge-cta"
+                onClick={() => { clearAnimations(); setWorkspacePage('forge'); }}>
+                ✧ 이 아이디어 다듬기 → FORGE
+              </button>
+              <div className="chaos-utility-actions">
+                <button type="button" className="btn btn-outline" id="copyBtn" onClick={copy}>결과 복사</button>
+                <button type="button" className="btn btn-outline" id="exportMdBtn"
+                  onClick={() => exportResult('md')}>MD</button>
+                <button type="button" className="btn btn-outline" id="exportJsonBtn"
+                  onClick={() => exportResult('json')}>JSON</button>
+              </div>
+            </div>
+
+            <details className="v2-save-details">
+              <summary>+ 이 조합을 보관함에 저장</summary>
+              <div className="result-actions">
+                <input id="ideaTitle" type="text" className="input input-inline"
+                  placeholder="아이디어 제목 (선택)" maxLength={60}
+                  value={title} onChange={(e) => setTitle(e.target.value)} />
+                <button type="button" className="btn btn-accent" id="saveBtn"
+                  onClick={saveIdea}>아이디어 저장</button>
+              </div>
+            </details>
+          </section>
+        )}
+
+        {workspacePage === 'forge' && (
+          <ForgeWorkspace generator={gen} values={current.values} preview={preview}
+            isRolling={isRolling} lockedCount={lockedCount} doc={forgeDocs[generatorId] || {}}
+            onUpdate={updateForgeDoc} onCopy={copyConcept}
+            onBack={() => setWorkspacePage('chaos')} />
+        )}
+
+        {workspacePage === 'library' && (
+          <section className="v2-screen library-screen" aria-labelledby="libraryTitle">
+            <div className="v2-intro">
+              <p className="v2-kicker">04 / LIBRARY — YOUR CREATIVE ARCHIVE</p>
+              <h2 id="libraryTitle">아이디어를 잃지 마세요.</h2>
+              <p>저장한 결과와 사용자 키워드를 관리해요. 데이터는 현재 브라우저에 보관됩니다.</p>
+            </div>
+            <div className="panels">
+              <IdeasPanel ideas={filteredIdeas} total={ideas.length} search={search}
+                onSearch={setSearch} onLoad={loadIdea} onDelete={deleteIdea} />
+              <CustomPanel custom={custom} onAdd={addCustom} onDelete={deleteCustom} />
+            </div>
+          </section>
+        )}
       </main>
 
       <footer className="site-footer">
-        <p>CHAOS FORGE v1.2.1 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
+        <p>CHAOS FORGE · PROJECT REFORGE ALPHA · 저장 자료는 이 브라우저에만 보관됩니다.</p>
       </footer>
-
-      <div className={`toast${toast ? ' is-show' : ''}`} id="toast" role="status" aria-live="polite">
-        {toast}
-      </div>
+      <div className={`toast${toast ? ' is-show' : ''}`} id="toast"
+        role="status" aria-live="polite">{toast}</div>
     </>
   );
 }
