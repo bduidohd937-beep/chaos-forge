@@ -30,6 +30,9 @@ const CHAOS_HINTS = {
 
 const SPIN_STEP = 70;
 const STAGGER = 110;
+// 실사용 속도: 클래식은 약 2.5초, 슬롯은 약 3.3초에 걸쳐 결과 확정.
+// animationMs prop을 주입하는 자동 테스트는 기존 짧은 타이밍을 유지한다.
+const DEFAULT_ANIMATION_MS = 1800;
 const REEL_STYLES = ['classic', 'slot', 'instant'];
 
 // 접근성: 움직임 최소화 설정에서는 슬롯 연출을 생략한다.
@@ -82,7 +85,7 @@ function restoreResults(draft, customKeywords) {
 /**
  * @param {{animationMs?: number}} props animationMs=0 이면 슬롯 연출 없이 즉시 표시 (테스트용)
  */
-export default function App({ animationMs = 620 }) {
+export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [draft] = useState(() => Storage.loadDraft());
   const [custom, setCustom] = useState(() => Storage.loadCustom());
   const [results, setResults] = useState(() => restoreResults(draft, Storage.loadCustom()));
@@ -205,8 +208,9 @@ export default function App({ animationMs = 620 }) {
         .map((slot) => slot.key);
 
       const isSlot = reelStyle === 'slot' || options.overdrive === true;
-      const animated = reelStyle !== 'instant' && animationMs > 0 &&
-        motionAllowed() && unlocked.length > 0;
+      // OS의 움직임 최소화 설정은 첫 기본값만 '즉시'로 정한다.
+      // 사용자가 직접 클래식/슬롯을 선택했다면 명시적인 재생 의사로 존중한다.
+      const animated = reelStyle !== 'instant' && animationMs > 0 && unlocked.length > 0;
       setActiveSpinStyle(isSlot ? 'slot' : 'classic');
       const completion = `${target.title} 생성 완료 · ${modeName(nextMode)}` +
         (nextMode === 'hybrid' ? ` (혼돈 ${nextChaos})` : '');
@@ -219,8 +223,8 @@ export default function App({ animationMs = 620 }) {
         setSpinText({ ...snapshot.values });
         setSpinning(Object.fromEntries(unlocked.map((key) => [key, true])));
 
-        const baseMs = isSlot ? Math.max(760, animationMs) : animationMs;
-        const staggerMs = isSlot ? 160 : STAGGER;
+        const baseMs = isSlot ? Math.max(760, Math.round(animationMs * 1.15)) : animationMs;
+        const staggerMs = isSlot ? Math.max(160, Math.round(animationMs * 0.1)) : STAGGER;
         const tickMs = isSlot ? 52 : SPIN_STEP;
         const start = Date.now();
         const finished = new Set();
@@ -292,7 +296,7 @@ export default function App({ animationMs = 620 }) {
     clearAnimations();
     const isSlot = reelStyle === 'slot';
     setActiveSpinStyle(isSlot ? 'slot' : 'classic');
-    if (animationMs <= 0 || reelStyle === 'instant' || !motionAllowed()) return;
+    if (animationMs <= 0 || reelStyle === 'instant') return;
 
     const pool = getPool(generatorId, slotKey, custom);
     const duration = isSlot ? Math.max(520, animationMs * 0.8) : Math.max(260, animationMs * 0.6);
@@ -665,7 +669,8 @@ export default function App({ animationMs = 620 }) {
               </div>
               <div className="chaos-primary-actions">
                 <button type="button" className="btn btn-primary v2-generate" id="generateBtn"
-                  onClick={() => generate()}>◈ 전체 추첨</button>
+                  aria-busy={isRolling}
+                  onClick={() => generate()}>{isRolling ? '◈ 추첨 진행 중…' : '◈ 전체 추첨'}</button>
                 <button type="button" className="btn btn-overdrive" id="overdriveBtn"
                   title="설정을 바꾸지 않고 이번 추첨에만 혼돈 5 적용"
                   onClick={overdrive}>⚡ 폭주 추첨</button>
@@ -677,7 +682,7 @@ export default function App({ animationMs = 620 }) {
             <div className="reel-status" role="status" aria-live="polite">
               <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
               {isRolling
-                ? `키워드 추첨 중 · ${Object.keys(spinning).length}개 카드 회전`
+                ? `${activeSpinStyle === 'slot' ? '🎰 슬롯' : '✦ 클래식'} 추첨 진행 중 · ${Object.keys(spinning).length}개 남음 · 순차 확정`
                 : `${lockedCount}개 고정 · ${gen.slots.length - lockedCount}개 재추첨 가능`}
             </div>
             <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
