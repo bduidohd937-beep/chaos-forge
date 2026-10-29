@@ -1,0 +1,27 @@
+{
+  "name": "chaos-forge",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "장르 적합성과 혼돈을 조절하는 한국어 아이디어 생성기 (소설·게임·캐릭터·영웅)",
+  "homepage": "https://bduidohd937-beep.github.io/chaos-forge/",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^30.1.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
