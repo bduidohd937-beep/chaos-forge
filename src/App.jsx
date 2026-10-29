@@ -7,11 +7,13 @@ import {
   generateResult,
   rerollSlot,
   getPool,
-  normalizeGenre
+  normalizeGenreSelection,
+  ALL_GENRES
 } from './engine.js';
 import Storage from './storage.js';
 import { buildExportData, buildJson, buildMarkdown, buildFilename, downloadFile } from './export.js';
-import ControlsBar from './components/ControlsBar.jsx';
+import SetupScreen from './components/SetupScreen.jsx';
+import ForgeWorkspace from './components/ForgeWorkspace.jsx';
 import ResultCard from './components/ResultCard.jsx';
 import IdeasPanel from './components/IdeasPanel.jsx';
 import CustomPanel from './components/CustomPanel.jsx';
@@ -90,10 +92,20 @@ export default function App({ animationMs = 620 }) {
   const [mode, setMode] = useState(
     () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'hybrid')
   );
-  const [genre, setGenre] = useState(() => normalizeGenre(
+  const initialSelection = normalizeGenreSelection(
     GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story',
-    draft?.genre ?? '판'
-  ));
+    draft?.genreSelection || { main: draft?.genre, subs: [] }
+  );
+  const [genre, setGenre] = useState(initialSelection.main);
+  const [subgenres, setSubgenres] = useState(initialSelection.subs);
+  const [workspacePage, setWorkspacePage] = useState(
+    () => ['setup','chaos','forge','library'].includes(draft?.workspacePage)
+      ? draft.workspacePage : 'chaos'
+  );
+  const [forgeDocs, setForgeDocs] = useState(
+    () => draft?.forgeDocs && typeof draft.forgeDocs === 'object'
+      && !Array.isArray(draft.forgeDocs) ? draft.forgeDocs : {}
+  );
   const [chaos, setChaos] = useState(() => {
     const value = Number(draft?.chaos);
     return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
@@ -129,9 +141,9 @@ export default function App({ animationMs = 620 }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
-    const ok = Storage.saveDraft({ generatorId, mode, genre, chaos, results, reelStyle });
+    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, chaos, results, reelStyle]);
+  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -164,7 +176,8 @@ export default function App({ animationMs = 620 }) {
     (overrides = {}, options = {}) => {
       const gid = overrides.generatorId ?? generatorId;
       const nextMode = overrides.mode ?? mode;
-      const nextGenre = normalizeGenre(gid, overrides.genre ?? genre);
+      const nextGenre = normalizeGenreSelection(gid, { main: overrides.genre ?? genre, subs: overrides.subgenres ?? subgenres }).main;
+      const nextSubs = normalizeGenreSelection(gid, { main: nextGenre, subs: overrides.subgenres ?? subgenres }).subs;
       const nextChaos = overrides.chaos ?? chaos;
       const target = GENERATOR_MAP[gid];
       const snapshot = results[gid] ?? { values: {}, locks: {} };
@@ -176,6 +189,7 @@ export default function App({ animationMs = 620 }) {
       const finalValues = generateResult(gid, {
         mode: nextMode,
         genre: nextGenre,
+        genres: { main: nextGenre, subs: nextSubs },
         chaos: nextChaos,
         custom,
         locks: snapshot.locks,
@@ -258,7 +272,7 @@ export default function App({ animationMs = 620 }) {
         showToast(completion);
       }
     },
-    [generatorId, mode, genre, chaos, results, custom, reelStyle, animationMs, clearAnimations, showToast]
+    [generatorId, mode, genre, subgenres, chaos, results, custom, reelStyle, animationMs, clearAnimations, showToast]
   );
 
   const reroll = (slotKey) => {
@@ -266,7 +280,7 @@ export default function App({ animationMs = 620 }) {
       showToast('잠긴 항목은 재추첨되지 않습니다');
       return;
     }
-    const text = rerollSlot(generatorId, slotKey, { mode, genre, chaos, custom });
+    const text = rerollSlot(generatorId, slotKey, { mode, genre, genres: { main: genre, subs: subgenres }, chaos, custom, previous: current.values[slotKey] });
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
@@ -352,21 +366,29 @@ export default function App({ animationMs = 620 }) {
     clearAnimations();
     setSpinText({});
     setGeneratorId(id);
-    setGenre((prev) => normalizeGenre(id, prev));
+    setGenre((prev) => normalizeGenreSelection(id, { main: prev, subs: subgenres }).main);
   };
 
   const changeGenre = (value) => {
     setGenre(value);
-    generate({ genre: value });
+    setSubgenres((prev) => prev.filter((key) => key !== value));
   };
-
-  const changeMode = (value) => {
-    setMode(value);
-    generate({ mode: value });
+  const toggleSubgenre = (value) => {
+    if (value === genre) return;
+    setSubgenres((prev) => prev.includes(value)
+      ? prev.filter((key) => key !== value)
+      : prev.length < 3 ? [...prev, value] : prev);
   };
-
-  const commitChaos = () => {
-    if (mode === 'hybrid') generate({ chaos });
+  const changeMode = (value) => setMode(value);
+  const beginCreation = () => {
+    setWorkspacePage('chaos');
+    generate();
+  };
+  const updateForgeDoc = (field, value) => {
+    setForgeDocs((prev) => ({
+      ...prev,
+      [generatorId]: { ...(prev[generatorId] || {}), [field]: value }
+    }));
   };
 
   /** 폭주: 선택한 장르는 유지, 하이브리드 혼돈 5로 잠금 항목을 제외하고 재추첨. */
@@ -375,15 +397,13 @@ export default function App({ animationMs = 620 }) {
       showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
       return;
     }
-    setMode('hybrid');
-    setChaos(5);
     generate({ mode: 'hybrid', chaos: 5 }, { overdrive: true });
   };
 
   const buildText = () => {
     const lines = [
       `◈ CHAOS FORGE · ${gen.tab} (${gen.title})`,
-      `모드: ${modeName(mode)} | 장르: ${GENRE_NAME_MAP[genre] || genre}` +
+      `모드: ${modeName(mode)} | 장르: ${[genre, ...subgenres].map((key) => GENRE_NAME_MAP[key] || key).join(' × ')}` +
         (mode === 'hybrid' ? ` | 혼돈: ${chaos}/5` : ''),
       '----------------------------'
     ];
@@ -428,6 +448,7 @@ export default function App({ animationMs = 620 }) {
       generatorId,
       mode,
       genre,
+      genres: { main: genre, subs: subgenres },
       chaos,
       values: current.values,
       locks: current.locks
@@ -465,6 +486,7 @@ export default function App({ animationMs = 620 }) {
       generator: gen.id,
       mode,
       genre,
+      genres: { main: genre, subs: subgenres },
       chaos,
       values
     });
@@ -499,13 +521,16 @@ export default function App({ animationMs = 620 }) {
     setSpinText({});
     setGeneratorId(idea.generator);
     setMode(MODES.some((m) => m.k === idea.mode) ? idea.mode : 'hybrid');
-    setGenre(normalizeGenre(idea.generator, idea.genre));
+    const restored = normalizeGenreSelection(idea.generator, idea.genres || { main: idea.genre, subs: [] });
+    setGenre(restored.main);
+    setSubgenres(restored.subs);
     setChaos(Number(idea.chaos) || 3);
 
     const values = {};
     for (const [key, value] of Object.entries(idea.values || {})) values[key] = String(value);
     setResults((prev) => ({ ...prev, [idea.generator]: { values, locks: {} } }));
 
+    setWorkspacePage('chaos');
     showToast('저장한 아이디어를 불러왔습니다');
     if (typeof window !== 'undefined' && window.scrollTo) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
