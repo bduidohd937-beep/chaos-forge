@@ -42,7 +42,7 @@ jobs:
       - name: Checkout reviewed V2 alpha preview
         uses: actions/checkout@v4
         with:
-          ref: 16387453a5952c722d5c2e9df612e67ae4c49e7f
+          ref: 848882de6d80ac85703b3cd575dd31640e5dd3b1
           path: reforge-src
           persist-credentials: false
 
