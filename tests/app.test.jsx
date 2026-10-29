@@ -11,6 +11,12 @@ function setup() {
 }
 
 const click = (node) => fireEvent.click(node);
+const go = (page) => {
+  const button = Array.from(document.querySelectorAll('.workspace-tab'))
+    .find((node) => node.textContent.includes(page));
+  if (!button) throw new Error('Missing workspace ' + page);
+  click(button);
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -72,6 +78,7 @@ describe('CHAOS FORGE UI', () => {
 
   it('랜덤 모드에 따라 혼돈 컨트롤이 활성/비활성된다', () => {
     setup();
+    go('SETUP');
     click(screen.getByRole('radio', { name: '장르 맞춤' }));
     expect(document.querySelector('#chaosRange').disabled).toBe(true);
     expect(document.querySelector('#chaosControl').classList.contains('is-disabled')).toBe(true);
@@ -89,9 +96,12 @@ describe('CHAOS FORGE UI', () => {
     expect(cards()).toHaveLength(9);
     expect(screen.getByRole('tab', { name: 'HERO' }).getAttribute('aria-selected')).toBe('true');
 
+    go('SETUP');
     const genreOptions = Array.from(document.querySelectorAll('#genreSelect option')).map((o) => o.value);
-    expect(genreOptions).toHaveLength(8);
+    expect(genreOptions.length).toBeGreaterThan(20);
     expect(genreOptions).toContain('RPG');
+    expect(genreOptions).toContain('판');
+    go('CHAOS');
 
     click(screen.getByRole('tab', { name: 'CHARACTER' }));
     expect(cards()).toHaveLength(9);
@@ -115,6 +125,7 @@ describe('CHAOS FORGE UI', () => {
     setup();
     fireEvent.change(document.querySelector('#ideaTitle'), { target: { value: '내 테스트 이야기' } });
     click(document.querySelector('#saveBtn'));
+    go('LIBRARY');
 
     expect(document.querySelector('#ideaCount').textContent).toBe('1');
     expect(document.querySelectorAll('#ideaList li')).toHaveLength(1);
@@ -136,6 +147,7 @@ describe('CHAOS FORGE UI', () => {
     click(document.querySelector('#saveBtn'));
 
     click(screen.getByRole('tab', { name: 'STORY' }));
+    go('LIBRARY');
     click(screen.getByText('불러오기'));
 
     expect(screen.getByRole('tab', { name: 'HERO' }).getAttribute('aria-selected')).toBe('true');
@@ -144,6 +156,7 @@ describe('CHAOS FORGE UI', () => {
 
   it('사용자 키워드를 추가하면 생성 결과에 등장한다', () => {
     const { cards } = setup();
+    go('LIBRARY');
 
     fireEvent.change(document.querySelector('#customGenerator'), { target: { value: 'story' } });
     fireEvent.change(document.querySelector('#customSlot'), { target: { value: 'setting' } });
@@ -156,7 +169,9 @@ describe('CHAOS FORGE UI', () => {
     expect(document.querySelector('#customCount').textContent).toBe('1');
     expect(document.querySelector('#customList').textContent).toContain('고래가 사는 도시');
 
+    go('SETUP');
     click(screen.getByRole('radio', { name: '장르 맞춤' }));
+    go('CHAOS');
     const settingCard = cards().find((card) => card.dataset.slot === 'setting');
     let hit = false;
     for (let i = 0; i < 300 && !hit; i++) {
@@ -170,6 +185,7 @@ describe('CHAOS FORGE UI', () => {
     setup();
     fireEvent.change(document.querySelector('#ideaTitle'), { target: { value: '유지 테스트' } });
     click(document.querySelector('#saveBtn'));
+    go('LIBRARY');
 
     fireEvent.change(document.querySelector('#customText'), { target: { value: '새 키워드' } });
     fireEvent.submit(document.querySelector('#customForm'));
@@ -248,6 +264,7 @@ describe('V1.1 작업 초안 안정성', () => {
       expect(document.querySelector('.autosave-status').textContent).toContain('자동 저장 실패');
       click(document.querySelector('#saveBtn'));
       expect(document.querySelector('#toast').textContent).toContain('저장에 실패');
+      go('LIBRARY');
       expect(document.querySelector('#ideaCount').textContent).toBe('0');
     } finally {
       saveDraft.mockRestore();
@@ -258,18 +275,22 @@ describe('V1.1 작업 초안 안정성', () => {
 
 
 describe('V1.2 CHAOS MODE', () => {
-  it('폭주 생성은 하이브리드 혼돈 5로 전환하며 잠금은 유지한다', () => {
+  it('폭주 생성은 기본 장르·혼돈 설정을 바꾸지 않고 잠금을 유지한다', () => {
     const { cards } = setup();
+    go('SETUP');
     click(screen.getByRole('radio', { name: '장르 맞춤' }));
+    go('CHAOS');
     const target = cards()[1];
     click(target.querySelector('.js-lock'));
     const preserved = target.querySelector('.card-value').textContent;
 
     click(document.querySelector('#overdriveBtn'));
-    expect(screen.getByRole('radio', { name: '하이브리드' }).getAttribute('aria-checked')).toBe('true');
-    expect(document.querySelector('#chaosValue').textContent).toBe('5');
     expect(target.querySelector('.card-value').textContent).toBe(preserved);
     expect(target.classList.contains('is-locked')).toBe(true);
+
+    go('SETUP');
+    expect(screen.getByRole('radio', { name: '장르 맞춤' }).getAttribute('aria-checked')).toBe('true');
+    expect(document.querySelector('#chaosValue').textContent).toBe('3');
   });
 
   it('모든 카드 잠금 시 폭주와 전체 생성이 설정을 바꾸지 않는다', () => {
@@ -278,7 +299,6 @@ describe('V1.2 CHAOS MODE', () => {
     const before = cards().map((card) => card.querySelector('.card-value').textContent);
     click(document.querySelector('#overdriveBtn'));
     expect(document.querySelector('#toast').textContent).toContain('모든 항목');
-    expect(document.querySelector('#chaosValue').textContent).toBe('3');
     click(document.querySelector('#generateBtn'));
     expect(cards().map((card) => card.querySelector('.card-value').textContent)).toEqual(before);
   });
@@ -288,6 +308,7 @@ describe('V1.2 CHAOS MODE', () => {
     const setting = cards().find((card) => card.dataset.slot === 'setting').querySelector('.card-value');
     setting.textContent = '사라진 달의 도시';
     fireEvent.input(setting);
+    go('FORGE');
     expect(document.querySelector('.concept-preview').textContent).toContain('사라진 달의 도시');
     expect(document.querySelector('.preview-sections')).not.toBeNull();
     expect(document.querySelector('.forge-meter').getAttribute('aria-label')).toContain('전체 8개');
@@ -295,8 +316,11 @@ describe('V1.2 CHAOS MODE', () => {
 
   it('탭별로 다른 콘셉트 프리뷰를 보여준다', () => {
     setup();
+    go('FORGE');
     const first = document.querySelector('.preview-sections').textContent;
+    go('CHAOS');
     click(screen.getByRole('tab', { name: 'HERO' }));
+    go('FORGE');
     const second = document.querySelector('.preview-sections').textContent;
     expect(first).not.toBe(second);
     expect(document.querySelector('.preview-section').textContent).toContain('전투 정체성');
@@ -321,10 +345,10 @@ describe('V1.2.1 추첨 연출 복구', () => {
   it('기본 연출은 이전과 같은 클래식이며 선택을 자동 저장한다', () => {
     setup();
     const presets = Array.from(document.querySelectorAll('.reel-preset'));
-    expect(presets.map((p) => p.textContent)).toEqual(['클래식', '슬롯', '즉시']);
-    expect(presets[0].getAttribute('aria-pressed')).toBe('true');
-    click(presets[1]);
+    expect(presets.map((p) => p.textContent)).toEqual(['슬롯', '클래식', '즉시']);
     expect(presets[1].getAttribute('aria-pressed')).toBe('true');
+    click(presets[0]);
+    expect(presets[0].getAttribute('aria-pressed')).toBe('true');
     expect(Storage.loadDraft().reelStyle).toBe('slot');
   });
 
