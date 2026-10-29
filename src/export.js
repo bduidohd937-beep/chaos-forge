@@ -35,6 +35,7 @@ export function buildExportData({
   generatorId,
   mode,
   genre,
+  genres,
   chaos,
   values = {},
   locks = {},
@@ -51,6 +52,10 @@ export function buildExportData({
     mode,
     modeLabel: modeLabel(mode),
     genre: { key: genre, label: GENRE_NAME_MAP[genre] || genre },
+    genres: genres ? {
+      main: genres.main || genre,
+      subs: Array.isArray(genres.subs) ? genres.subs.slice(0, 3) : []
+    } : undefined,
     chaos: mode === 'hybrid' ? Number(chaos) || 1 : null,
     exportedAt: exportedAt.toISOString(),
     exportedAtLabel: formatStamp(exportedAt),
@@ -73,6 +78,9 @@ export function buildMarkdown(data) {
     `- 모드: ${data.modeLabel}`,
     `- 장르: ${data.genre.label}`
   ];
+  if (data.genres?.subs?.length) {
+    lines.push('- 서브 장르: ' + data.genres.subs.map((key) => GENRE_NAME_MAP[key] || key).join(' × '));
+  }
   if (data.chaos != null) lines.push(`- 혼돈: ${data.chaos}/5`);
   lines.push(`- 생성 시각: ${data.exportedAtLabel}`);
   lines.push('', '| 항목 | 내용 | 상태 |', '| --- | --- | --- |');
