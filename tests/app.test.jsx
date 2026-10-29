@@ -632,3 +632,48 @@ describe('V2.0 Alpha 가독성·화면 구성 검수', () => {
     expect(document.querySelector('#ideaList')).toBeNull();
   });
 });
+
+
+describe('Alpha 3 실제 사용자 추첨 기록', () => {
+  it('연속 재추첨에서 최근 나온 같은 슬롯 값을 피하고 기록을 초안에 저장한다', () => {
+    setup();
+    const card = document.querySelector('.result-card[data-slot="setting"]');
+    const values = [card.querySelector('.card-value').textContent];
+    for (let i = 0; i < 3; i++) {
+      click(card.querySelector('.js-reroll'));
+      values.push(card.querySelector('.card-value').textContent);
+    }
+    expect(new Set(values).size).toBe(values.length);
+    const saved = Storage.loadDraft();
+    expect(saved.recentHistory.story.setting.slice(-3)).toEqual(values.slice(1));
+    expect(saved.results.story.values.setting).toBe(values[3]);
+  });
+
+  it('새로고침 후에도 최근 재추첨 기록을 불러와 같은 결과를 연속 재사용하지 않는다', () => {
+    const first = setup();
+    const card = () => document.querySelector('.result-card[data-slot="setting"]');
+    click(card().querySelector('.js-reroll'));
+    click(card().querySelector('.js-reroll'));
+    const previous = Storage.loadDraft().recentHistory.story.setting.slice();
+    expect(previous.length).toBeGreaterThanOrEqual(2);
+    first.unmount();
+    render(<App animationMs={0} />);
+    click(card().querySelector('.js-reroll'));
+    const next = card().querySelector('.card-value').textContent;
+    expect(previous).not.toContain(next);
+    expect(Storage.loadDraft().recentHistory.story.setting.at(-1)).toBe(next);
+  });
+
+  it('전체 추첨을 반복해도 잠금이 유지되고 최근 슬롯 데이터가 갱신된다', () => {
+    setup();
+    const locked = document.querySelector('.result-card[data-slot="setting"]');
+    click(locked.querySelector('.js-lock'));
+    const before = locked.querySelector('.card-value').textContent;
+    click(document.querySelector('#generateBtn'));
+    click(document.querySelector('#generateBtn'));
+    const draft = Storage.loadDraft();
+    expect(draft.results.story.values.setting).toBe(before);
+    expect(draft.recentHistory.story.setting).toEqual([]);
+    expect(draft.recentHistory.story.event.length).toBeGreaterThan(0);
+  });
+});
