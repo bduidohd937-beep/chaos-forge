@@ -1220,3 +1220,37 @@ input[type="range"]::-moz-range-thumb {
   .v2-forge-cta { width: 100%; }
   .chaos-primary-actions .btn:not(.v2-generate) { flex: 1 1 100px; }
 }
+
+
+/* REFORGE Alpha — 추첨 연출의 즉각적인 시각 피드백 */
+.chaos-screen .reel-status {
+  margin: 16px 3px -3px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dim);
+  min-height: 28px;
+}
+.chaos-screen .reel-status:has(.reel-dot.is-active) { color: var(--cyan); }
+.chaos-screen .results.is-classic .result-card.is-spinning {
+  animation: classicDrawPulse .85s ease-in-out infinite alternate;
+  border-color: rgba(170, 133, 255, .72);
+  background: linear-gradient(140deg, rgba(170,133,255,.13),rgba(25,32,52,.94));
+}
+.chaos-screen .results.is-classic .result-card.is-spinning .reel-indicator {
+  display: inline;
+  color: var(--cyan);
+}
+.chaos-screen .results.is-slot .result-card.is-spinning {
+  background: linear-gradient(135deg,rgba(103,70,198,.22),rgba(18,27,48,.96));
+}
+.chaos-screen .result-card.is-spinning .card-value {
+  color: #f6f1ff;
+  text-shadow: 0 0 12px rgba(170,133,255,.42);
+}
+@keyframes classicDrawPulse {
+  from { box-shadow: 0 0 2px rgba(170,133,255,.08); border-color: rgba(170,133,255,.42); }
+  to { box-shadow: 0 0 19px rgba(170,133,255,.26); border-color: rgba(92,217,223,.72); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chaos-screen .results.is-classic .result-card.is-spinning { animation: none; }
+}
