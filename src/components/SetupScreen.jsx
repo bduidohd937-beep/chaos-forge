@@ -87,13 +87,13 @@ export default function SetupScreen({
               {MODES.map((item) => (
                 <button type="button" role="radio" key={item.k}
                   className={`setup-mode${mode === item.k ? ' selected' : ''}`}
-                  aria-checked={mode === item.k} onClick={() => onModeChange(item.k)}>
+                  aria-label={item.n} aria-checked={mode === item.k} onClick={() => onModeChange(item.k)}>
                   <span>{mode === item.k ? '◉' : '○'}</span>
                   <strong>{item.n}</strong>
                 </button>
               ))}
             </div>
-            <div className="setup-chaos" id="chaosControl">
+            <div className={`setup-chaos${mode !== "hybrid" ? " is-disabled" : ""}`} id="chaosControl">
               <div className="setup-sub-heading">
                 <label htmlFor="chaosRange">혼돈 레벨</label>
                 <strong id="chaosValue">{chaos}<span className="dim"> / 5</span></strong>
