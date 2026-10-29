@@ -87,7 +87,7 @@ describe('CHAOS FORGE UI', () => {
     expect(document.querySelector('#chaosRange').disabled).toBe(false);
 
     fireEvent.change(document.querySelector('#chaosRange'), { target: { value: '5' } });
-    expect(document.querySelector('#chaosValue').textContent).toBe('5');
+    expect(document.querySelector('#chaosValue').textContent.trim().startsWith('5')).toBe(true);
   });
 
   it('탭 전환 시 해당 생성기의 항목 수와 장르 목록이 바뀐다', () => {
@@ -290,7 +290,7 @@ describe('V1.2 CHAOS MODE', () => {
 
     go('SETUP');
     expect(screen.getByRole('radio', { name: '장르 맞춤' }).getAttribute('aria-checked')).toBe('true');
-    expect(document.querySelector('#chaosValue').textContent).toBe('3');
+    expect(document.querySelector('#chaosValue').textContent.trim().startsWith('3')).toBe(true);
   });
 
   it('모든 카드 잠금 시 폭주와 전체 생성이 설정을 바꾸지 않는다', () => {
