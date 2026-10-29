@@ -15,6 +15,8 @@ import ControlsBar from './components/ControlsBar.jsx';
 import ResultCard from './components/ResultCard.jsx';
 import IdeasPanel from './components/IdeasPanel.jsx';
 import CustomPanel from './components/CustomPanel.jsx';
+import ConceptPreview from './components/ConceptPreview.jsx';
+import { buildConceptPreview } from './synthesis.js';
 
 const CHAOS_HINTS = {
   1: '장르 키워드만 골라 닮은 느낌을 유지합니다.',
@@ -26,6 +28,11 @@ const CHAOS_HINTS = {
 
 const SPIN_STEP = 70;
 const STAGGER = 110;
+
+// 접근성: 움직임 최소화 설정에서는 슬롯 연출을 생략한다.
+const motionAllowed = () =>
+  typeof window === 'undefined' || !window.matchMedia ||
+  !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const modeName = (key) => MODES.find((m) => m.k === key)?.n || key;
 
@@ -105,6 +112,12 @@ export default function App({ animationMs = 620 }) {
   const gen = GENERATOR_MAP[generatorId];
   const current = results[generatorId] ?? { values: {}, locks: {} };
   const filteredIdeas = useMemo(() => Storage.searchIdeas(search), [ideas, search]);
+  const preview = useMemo(
+    () => buildConceptPreview(generatorId, current.values),
+    [generatorId, current.values]
+  );
+  const lockedCount = gen.slots.filter((slot) => current.locks[slot.key]).length;
+  const isRolling = Object.values(spinning).some(Boolean);
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
@@ -146,6 +159,10 @@ export default function App({ animationMs = 620 }) {
       const nextChaos = overrides.chaos ?? chaos;
       const target = GENERATOR_MAP[gid];
       const snapshot = results[gid] ?? { values: {}, locks: {} };
+      if (target.slots.every((slot) => snapshot.locks[slot.key])) {
+        showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
+        return;
+      }
 
       const finalValues = generateResult(gid, {
         mode: nextMode,
@@ -164,7 +181,7 @@ export default function App({ animationMs = 620 }) {
         .filter((slot) => !snapshot.locks[slot.key])
         .map((slot) => slot.key);
 
-      if (animationMs > 0 && unlocked.length > 0) {
+      if (animationMs > 0 && motionAllowed() && unlocked.length > 0) {
         const pools = {};
         for (const key of unlocked) pools[key] = getPool(gid, key, custom);
 
@@ -224,7 +241,7 @@ export default function App({ animationMs = 620 }) {
     }));
 
     clearAnimations();
-    if (animationMs <= 0) return;
+    if (animationMs <= 0 || !motionAllowed()) return;
 
     const pool = getPool(generatorId, slotKey, custom);
     const duration = Math.max(260, animationMs * 0.6);
@@ -303,6 +320,17 @@ export default function App({ animationMs = 620 }) {
     if (mode === 'hybrid') generate({ chaos });
   };
 
+  /** 폭주: 선택한 장르는 유지, 하이브리드 혼돈 5로 잠금 항목을 제외하고 재추첨. */
+  const overdrive = () => {
+    if (lockedCount === gen.slots.length) {
+      showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
+      return;
+    }
+    setMode('hybrid');
+    setChaos(5);
+    generate({ mode: 'hybrid', chaos: 5 });
+  };
+
   const buildText = () => {
     const lines = [
       `◈ CHAOS FORGE · ${gen.tab} (${gen.title})`,
@@ -317,11 +345,11 @@ export default function App({ animationMs = 620 }) {
     return lines.join('\n');
   };
 
-  const copy = async () => {
-    const text = buildText();
+  const copyText = async (text, label) => {
     try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(text);
-      showToast('결과를 클립보드에 복사했습니다');
+      showToast(`${label} 복사 완료`);
     } catch {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -337,9 +365,12 @@ export default function App({ animationMs = 620 }) {
         ok = false;
       }
       document.body.removeChild(ta);
-      showToast(ok ? '결과를 클립보드에 복사했습니다' : '복사에 실패했습니다. 직접 선택해 복사해 주세요');
+      showToast(ok ? `${label} 복사 완료` : '복사에 실패했습니다. 직접 선택해 복사해 주세요');
     }
   };
+
+  const copy = () => copyText(buildText(), '결과');
+  const copyConcept = () => copyText(preview.text, '콘셉트');
 
   /** 결과를 마크다운/JSON 파일로 내려받는다 */
   const exportResult = (format) => {
@@ -467,7 +498,7 @@ export default function App({ animationMs = 620 }) {
           </span>
           <div className="brand-text">
             <h1>CHAOS FORGE</h1>
-            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.1</p>
+            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.2</p>
           </div>
         </div>
 
@@ -512,10 +543,17 @@ export default function App({ animationMs = 620 }) {
           onChaosChange={setChaos}
           onChaosCommit={commitChaos}
           onGenerate={() => generate()}
+          onOverdrive={overdrive}
           onUnlockAll={unlockAll}
         />
 
-        <section className="results" id="results" aria-live="polite" aria-label="생성 결과">
+        <div className="reel-status" role="status" aria-live="polite">
+          <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
+          {isRolling
+            ? `키워드 조합 중 · ${Object.keys(spinning).length}개 슬롯 회전`
+            : `${gen.title} · ${lockedCount}개 고정 / ${gen.slots.length}개 항목`}
+        </div>
+        <section className="results" id="results" aria-live="off" aria-label="생성 결과">
           {gen.slots.map((slot) => {
             const isSpinning = Boolean(spinning[slot.key]);
             const value = isSpinning
@@ -537,6 +575,14 @@ export default function App({ animationMs = 620 }) {
             );
           })}
         </section>
+
+        <ConceptPreview
+          preview={preview}
+          isRolling={isRolling}
+          lockedCount={lockedCount}
+          totalCount={gen.slots.length}
+          onCopy={copyConcept}
+        />
 
         <section className="result-actions">
           <button type="button" className="btn btn-outline" id="copyBtn" onClick={copy}>
@@ -588,7 +634,7 @@ export default function App({ animationMs = 620 }) {
       </main>
 
       <footer className="site-footer">
-        <p>CHAOS FORGE v1.1 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
+        <p>CHAOS FORGE v1.2 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
       </footer>
 
       <div className={`toast${toast ? ' is-show' : ''}`} id="toast" role="status" aria-live="polite">
