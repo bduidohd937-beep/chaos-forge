@@ -37,6 +37,33 @@ jobs:
       - name: Build
         run: npm run build
 
+      # 공개 V1.x 사이트는 dist/ 루트에 그대로 둔다.
+      # V2 Alpha는 검증된 특정 커밋을 별도 하위 경로에 빌드해서 포함한다.
+      - name: Checkout reviewed V2 alpha preview
+        uses: actions/checkout@v4
+        with:
+          ref: fa9e6123a6de850bd3cb4e8cd78fc5e21b0cd6a2
+          path: reforge-src
+          persist-credentials: false
+
+      - name: Install and test V2 preview
+        working-directory: reforge-src
+        run: |
+          npm ci
+          npm test -- --run
+
+      - name: Build V2 preview
+        working-directory: reforge-src
+        run: npm run build
+
+      - name: Include V2 preview without changing the production homepage
+        run: |
+          mkdir -p dist/preview/v2
+          cp -a reforge-src/dist/. dist/preview/v2/
+          test -f dist/index.html
+          test -f dist/preview/v2/index.html
+          test -d dist/preview/v2/assets
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
