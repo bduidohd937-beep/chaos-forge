@@ -11,6 +11,7 @@ export default function ControlsBar({
   onChaosChange,
   onChaosCommit,
   onGenerate,
+  onOverdrive,
   onUnlockAll
 }) {
   const hybrid = mode === 'hybrid';
@@ -75,6 +76,11 @@ export default function ControlsBar({
       <div className="control control-action">
         <button type="button" className="btn btn-primary" id="generateBtn" onClick={onGenerate}>
           <span className="btn-spark" aria-hidden="true">◈</span> 전체 생성
+        </button>
+        <button type="button" className="btn btn-overdrive" id="overdriveBtn"
+          title="장르는 유지하고 혼돈 5로 잠기지 않은 카드만 다시 뽑습니다"
+          onClick={onOverdrive}>
+          ⚡ 폭주 생성
         </button>
         <button type="button" className="btn btn-ghost" id="unlockAllBtn" onClick={onUnlockAll}>
           잠금 해제

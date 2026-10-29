@@ -255,3 +255,63 @@ describe('V1.1 작업 초안 안정성', () => {
     }
   });
 });
+
+
+describe('V1.2 CHAOS MODE', () => {
+  it('폭주 생성은 하이브리드 혼돈 5로 전환하며 잠금은 유지한다', () => {
+    const { cards } = setup();
+    click(screen.getByRole('radio', { name: '장르 맞춤' }));
+    const target = cards()[1];
+    click(target.querySelector('.js-lock'));
+    const preserved = target.querySelector('.card-value').textContent;
+
+    click(document.querySelector('#overdriveBtn'));
+    expect(screen.getByRole('radio', { name: '하이브리드' }).getAttribute('aria-checked')).toBe('true');
+    expect(document.querySelector('#chaosValue').textContent).toBe('5');
+    expect(target.querySelector('.card-value').textContent).toBe(preserved);
+    expect(target.classList.contains('is-locked')).toBe(true);
+  });
+
+  it('모든 카드 잠금 시 폭주와 전체 생성이 설정을 바꾸지 않는다', () => {
+    const { cards } = setup();
+    cards().forEach((card) => click(card.querySelector('.js-lock')));
+    const before = cards().map((card) => card.querySelector('.card-value').textContent);
+    click(document.querySelector('#overdriveBtn'));
+    expect(document.querySelector('#toast').textContent).toContain('모든 항목');
+    expect(document.querySelector('#chaosValue').textContent).toBe('3');
+    click(document.querySelector('#generateBtn'));
+    expect(cards().map((card) => card.querySelector('.card-value').textContent)).toEqual(before);
+  });
+
+  it('직접 편집한 값은 콘셉트 프리뷰에도 바로 반영된다', () => {
+    const { cards } = setup();
+    const setting = cards().find((card) => card.dataset.slot === 'setting').querySelector('.card-value');
+    setting.textContent = '사라진 달의 도시';
+    fireEvent.input(setting);
+    expect(document.querySelector('.concept-preview').textContent).toContain('사라진 달의 도시');
+    expect(document.querySelector('.preview-sections')).not.toBeNull();
+    expect(document.querySelector('.forge-meter').getAttribute('aria-label')).toContain('전체 8개');
+  });
+
+  it('탭별로 다른 콘셉트 프리뷰를 보여준다', () => {
+    setup();
+    const first = document.querySelector('.preview-sections').textContent;
+    click(screen.getByRole('tab', { name: 'HERO' }));
+    const second = document.querySelector('.preview-sections').textContent;
+    expect(first).not.toBe(second);
+    expect(document.querySelector('.preview-section').textContent).toContain('전투 정체성');
+  });
+
+  it('움직임 최소화 브라우저 설정에서는 슬롯 연출을 생략한다', () => {
+    const previous = window.matchMedia;
+    window.matchMedia = vi.fn(() => ({ matches: true }));
+    try {
+      render(<App animationMs={620} />);
+      click(document.querySelector('#generateBtn'));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
+      expect(document.querySelector('.preview-pending')).toBeNull();
+    } finally {
+      window.matchMedia = previous;
+    }
+  });
+});
