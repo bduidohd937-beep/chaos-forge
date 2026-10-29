@@ -485,3 +485,68 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
     expect(document.querySelector('.chaos-formula').textContent).toContain('로맨스');
   });
 });
+
+
+describe('V2.0 Alpha 추첨 연출 체감 속도 회귀 검증', () => {
+  it('기본 클래식은 클릭 후 1초 이상 실제 추첨 상태를 유지한다', () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      click(document.querySelector('#generateBtn'));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(8);
+      expect(document.querySelector('.reel-status').textContent).toContain('클래식 추첨 진행 중');
+      expect(document.querySelector('#generateBtn').getAttribute('aria-busy')).toBe('true');
+      act(() => vi.advanceTimersByTime(1100));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(8);
+      act(() => vi.advanceTimersByTime(1900));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
+      expect(document.querySelector('#generateBtn').getAttribute('aria-busy')).toBe('false');
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('기본 슬롯은 최소 2초 동안 회전하다가 카드를 순서대로 결정한다', () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      click(screen.getByRole('button', { name: '슬롯' }));
+      click(document.querySelector('#generateBtn'));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(8);
+      act(() => vi.advanceTimersByTime(1200));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(8);
+      act(() => vi.advanceTimersByTime(1000));
+      const remaining = document.querySelectorAll('.result-card.is-spinning').length;
+      expect(remaining).toBeGreaterThan(0);
+      expect(remaining).toBeLessThan(8);
+      act(() => vi.advanceTimersByTime(1600));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('시스템 움직임 최소화 사용자가 직접 슬롯을 고르면 명시적 선택을 따른다', () => {
+    const old = window.matchMedia;
+    window.matchMedia = vi.fn(() => ({ matches: true }));
+    try {
+      render(<App animationMs={620} />);
+      expect(screen.getByRole('button', { name: '즉시' }).getAttribute('aria-pressed')).toBe('true');
+      click(screen.getByRole('button', { name: '슬롯' }));
+      click(document.querySelector('#generateBtn'));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(8);
+    } finally {
+      window.matchMedia = old;
+    }
+  });
+
+  it('즉시 모드는 기본 연출 시간과 관계없이 회전하지 않는다', () => {
+    render(<App />);
+    click(screen.getByRole('button', { name: '즉시' }));
+    click(document.querySelector('#generateBtn'));
+    expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
+    expect(document.querySelector('#generateBtn').getAttribute('aria-busy')).toBe('false');
+  });
+});
