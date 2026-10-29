@@ -54,6 +54,7 @@ export default function ResultCard({
             type="button"
             className={`icon-btn js-lock${locked ? ' is-on' : ''}`}
             aria-pressed={locked}
+            aria-label={locked ? `${label} 잠금 해제` : `${label} 잠그기`}
             title={locked ? '잠금 해제' : '이 항목 잠금'}
             onClick={onLock}
             dangerouslySetInnerHTML={{ __html: locked ? ICONS.lockClosed : ICONS.lockOpen }}
@@ -61,6 +62,7 @@ export default function ResultCard({
           <button
             type="button"
             className="icon-btn js-reroll"
+            aria-label={`${label} 다시 뽑기`}
             title="이 항목만 재추첨"
             onClick={onReroll}
             dangerouslySetInnerHTML={{ __html: ICONS.refresh }}
