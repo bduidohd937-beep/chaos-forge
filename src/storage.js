@@ -96,6 +96,10 @@ const Storage = {
       generator: idea.generator || '',
       mode: idea.mode || '',
       genre: idea.genre || '',
+      genres: idea.genres && typeof idea.genres === 'object' ? {
+        main: String(idea.genres.main || idea.genre || ''),
+        subs: Array.isArray(idea.genres.subs) ? idea.genres.subs.slice(0, 3) : []
+      } : { main: String(idea.genre || ''), subs: [] },
       chaos: idea.chaos == null ? null : idea.chaos,
       values: idea.values || {},
       createdAt: index >= 0 ? list[index].createdAt : now,
