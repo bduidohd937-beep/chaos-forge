@@ -59,6 +59,35 @@ function seedResults(customKeywords) {
   return seeded;
 }
 
+/** 최근 4회 기록은 슬롯별로만 보관하며 예전 초안에는 없어도 된다. */
+function restoreRecentHistory(draft) {
+  const source = draft?.recentHistory;
+  const restored = {};
+  for (const gen of GENERATORS) {
+    restored[gen.id] = {};
+    for (const slot of gen.slots) {
+      const items = source?.[gen.id]?.[slot.key];
+      restored[gen.id][slot.key] = Array.isArray(items)
+        ? items.filter((item) => typeof item === 'string').slice(-4).map((item) => item.slice(0, 5000))
+        : [];
+    }
+  }
+  return restored;
+}
+
+function nextRecentHistory(previous, generatorId, previousValues, nextValues, locks, slots) {
+  const old = previous[generatorId] || {};
+  const updated = { ...old };
+  for (const slot of slots) {
+    if (locks?.[slot.key]) continue;
+    const key = slot.key;
+    const values = [...(old[key] || []), previousValues?.[key], nextValues?.[key]]
+      .filter((item) => typeof item === 'string' && item.trim());
+    updated[key] = values.slice(-4);
+  }
+  return { ...previous, [generatorId]: updated };
+}
+
 /** 저장된 초안을 현재 생성기 슬롯 구조에 맞춰 안전하게 복원한다. */
 function restoreResults(draft, customKeywords) {
   const defaults = seedResults(customKeywords);
@@ -89,6 +118,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [draft] = useState(() => Storage.loadDraft());
   const [custom, setCustom] = useState(() => Storage.loadCustom());
   const [results, setResults] = useState(() => restoreResults(draft, Storage.loadCustom()));
+  const recentHistoryRef = useRef(restoreRecentHistory(draft));
   const [generatorId, setGeneratorId] = useState(
     () => (GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story')
   );
@@ -145,7 +175,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
-    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs });
+    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, recentHistory: recentHistoryRef.current });
     setDraftSaved(ok);
   }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs]);
 
@@ -205,8 +235,12 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         chaos: nextChaos,
         custom,
         locks: snapshot.locks,
-        values: snapshot.values
+        values: snapshot.values,
+        recent: recentHistoryRef.current[gid] || {}
       });
+      recentHistoryRef.current = nextRecentHistory(
+        recentHistoryRef.current, gid, snapshot.values, finalValues, snapshot.locks, target.slots
+      );
 
       // 연출과 무관하게 데이터는 즉시 확정 (연출 중 저장/복사 대비)
       setResults((prev) => ({ ...prev, [gid]: { values: finalValues, locks: snapshot.locks } }));
@@ -293,7 +327,19 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       showToast('잠긴 항목은 재추첨되지 않습니다');
       return;
     }
-    const text = rerollSlot(generatorId, slotKey, { mode, genre, genres: { main: genre, subs: subgenres }, chaos, custom, previous: current.values[slotKey] });
+    const text = rerollSlot(generatorId, slotKey, {
+      mode, genre, genres: { main: genre, subs: subgenres },
+      chaos, custom, previous: current.values[slotKey],
+      recent: recentHistoryRef.current[generatorId]?.[slotKey] || []
+    });
+    recentHistoryRef.current = nextRecentHistory(
+      recentHistoryRef.current,
+      generatorId,
+      current.values,
+      { ...current.values, [slotKey]: text },
+      Object.fromEntries(gen.slots.filter((slot) => slot.key !== slotKey).map((slot) => [slot.key, true])),
+      gen.slots
+    );
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
