@@ -132,6 +132,10 @@ export function pickWithGenreMix(pool, {
 
   // Preserve the relative 55:45 group weighting rather than favoring genres
   // with large underlying pools; genre variety depends on user selection.
-  const group = weightedPick(candidates, ({ priority }) => priority, rng);
+  const groupsWithFreshOptions = candidates.filter(({ options }) =>
+    options.some((kw) => !recent.has(kw.t.trim().toLocaleLowerCase()))
+  );
+  const activeGroups = groupsWithFreshOptions.length ? groupsWithFreshOptions : candidates;
+  const group = weightedPick(activeGroups, ({ priority }) => priority, rng);
   return pickFit(group.options, group.genre);
 }
