@@ -18,8 +18,9 @@ import { DATA_STORY } from './data/story.js';
 import { DATA_GAME } from './data/game.js';
 import { DATA_CHARACTER } from './data/character.js';
 import { DATA_HERO } from './data/hero.js';
+import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
 
-export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES };
+export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES, ALL_GENRES, normalizeGenreSelection };
 
 export const MODES = [
   { k: 'genre', n: '장르 맞춤' },
@@ -159,6 +160,18 @@ export function pickKeyword(pool, opts = {}) {
   const genre = opts.genre || '';
   const rng = typeof opts.rng === 'function' ? opts.rng : Math.random;
 
+  if (opts.genres && opts.generatorId) {
+    return pickWithGenreMix(pool, {
+      generatorId: opts.generatorId,
+      genres: opts.genres,
+      mode,
+      chaos: opts.chaos,
+      rng,
+      weightedPick,
+      chaosOutProbability
+    });
+  }
+
   if (mode === 'random' || !genre) {
     return weightedPick(pool, null, rng);
   }
@@ -224,7 +237,7 @@ export function generateResult(generatorId, opts = {}) {
       result[slot.key] = typeof values[slot.key] === 'string' ? values[slot.key] : '';
       continue;
     }
-    const kw = pickKeyword(getPool(generatorId, slot.key, opts.custom), opts);
+    const kw = pickKeyword(getPool(generatorId, slot.key, opts.custom), { ...opts, generatorId });
     result[slot.key] = kw ? kw.t : '';
   }
   return result;
@@ -232,6 +245,10 @@ export function generateResult(generatorId, opts = {}) {
 
 /** 항목별 재추첨 */
 export function rerollSlot(generatorId, slotKey, opts = {}) {
-  const kw = pickKeyword(getPool(generatorId, slotKey, opts.custom), opts);
+  const pool = getPool(generatorId, slotKey, opts.custom);
+  const filtered = opts.previous && pool.length > 1
+    ? pool.filter((item) => item.t !== opts.previous)
+    : pool;
+  const kw = pickKeyword(filtered.length ? filtered : pool, { ...opts, generatorId });
   return kw ? kw.t : '';
 }
