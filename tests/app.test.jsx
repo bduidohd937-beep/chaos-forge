@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import Storage from '../src/storage.js';
 import { render, fireEvent, screen, cleanup } from '@testing-library/react';
 import App from '../src/App.jsx';
 
@@ -215,5 +216,42 @@ describe('CHAOS FORGE UI', () => {
     setup();
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+
+describe('V1.1 작업 초안 안정성', () => {
+  it('생성기 상태와 잠금/결과가 새로고침 후에도 복원된다', () => {
+    const first = setup();
+    const storyValue = first.cards()[1].querySelector('.card-value').textContent;
+    click(first.cards()[1].querySelector('.js-lock'));
+    click(screen.getByRole('tab', { name: 'HERO' }));
+
+    const saved = Storage.loadDraft();
+    expect(saved.generatorId).toBe('hero');
+    expect(saved.results.story.values.setting).toBe(storyValue);
+    expect(saved.results.story.locks.setting).toBe(true);
+
+    first.unmount();
+    const second = setup();
+    expect(screen.getByRole('tab', { name: 'HERO' }).getAttribute('aria-selected')).toBe('true');
+    click(screen.getByRole('tab', { name: 'STORY' }));
+    expect(second.cards()[1].querySelector('.card-value').textContent).toBe(storyValue);
+    expect(second.cards()[1].classList.contains('is-locked')).toBe(true);
+  });
+
+  it('저장 실패를 성공으로 표시하지 않는다', () => {
+    const saveDraft = vi.spyOn(Storage, 'saveDraft').mockReturnValue(false);
+    const saveIdea = vi.spyOn(Storage, 'saveIdea').mockReturnValue(null);
+    try {
+      setup();
+      expect(screen.getByRole('status', { name: '' }).textContent).toContain('자동 저장 실패');
+      click(document.querySelector('#saveBtn'));
+      expect(document.querySelector('#toast').textContent).toContain('저장에 실패');
+      expect(document.querySelector('#ideaCount').textContent).toBe('0');
+    } finally {
+      saveDraft.mockRestore();
+      saveIdea.mockRestore();
+    }
   });
 });
