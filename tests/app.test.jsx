@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Storage from '../src/storage.js';
-import { render, fireEvent, screen, cleanup } from '@testing-library/react';
+import { render, fireEvent, screen, cleanup, act } from '@testing-library/react';
 import App from '../src/App.jsx';
 
 function setup() {
@@ -313,5 +313,51 @@ describe('V1.2 CHAOS MODE', () => {
     } finally {
       window.matchMedia = previous;
     }
+  });
+});
+
+
+describe('V1.2.1 추첨 연출 복구', () => {
+  it('기본 연출은 이전과 같은 클래식이며 선택을 자동 저장한다', () => {
+    setup();
+    const presets = Array.from(document.querySelectorAll('.reel-preset'));
+    expect(presets.map((p) => p.textContent)).toEqual(['클래식', '슬롯', '즉시']);
+    expect(presets[0].getAttribute('aria-pressed')).toBe('true');
+    click(presets[1]);
+    expect(presets[1].getAttribute('aria-pressed')).toBe('true');
+    expect(Storage.loadDraft().reelStyle).toBe('slot');
+  });
+
+  it('슬롯 모드에서 회전 후 순차 정지하고 결과가 확정된다', () => {
+    vi.useFakeTimers();
+    try {
+      render(<App animationMs={620} />);
+      click(screen.getByRole('button', { name: '슬롯' }));
+      click(document.querySelector('#generateBtn'));
+      expect(document.querySelector('.results').classList.contains('is-slot')).toBe(true);
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(8);
+      expect(document.querySelector('#toast').textContent).toContain('추첨 중');
+
+      act(() => vi.advanceTimersByTime(810));
+      const intermediate = document.querySelectorAll('.result-card.is-spinning').length;
+      expect(intermediate).toBeGreaterThan(0);
+      expect(intermediate).toBeLessThan(8);
+
+      act(() => vi.advanceTimersByTime(1900));
+      expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
+      expect(document.querySelector('#toast').textContent).toContain('생성 완료');
+      expect(document.querySelector('.preview-pending')).toBeNull();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('즉시 모드는 기다림 없이 결과를 보여준다', () => {
+    render(<App animationMs={620} />);
+    click(screen.getByRole('button', { name: '즉시' }));
+    click(document.querySelector('#generateBtn'));
+    expect(document.querySelectorAll('.result-card.is-spinning')).toHaveLength(0);
+    expect(document.querySelector('#toast').textContent).toContain('생성 완료');
   });
 });
