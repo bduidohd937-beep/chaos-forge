@@ -245,7 +245,7 @@ describe('V1.1 작업 초안 안정성', () => {
     const saveIdea = vi.spyOn(Storage, 'saveIdea').mockReturnValue(null);
     try {
       setup();
-      expect(screen.getByRole('status', { name: '' }).textContent).toContain('자동 저장 실패');
+      expect(document.querySelector('.autosave-status').textContent).toContain('자동 저장 실패');
       click(document.querySelector('#saveBtn'));
       expect(document.querySelector('#toast').textContent).toContain('저장에 실패');
       expect(document.querySelector('#ideaCount').textContent).toBe('0');
