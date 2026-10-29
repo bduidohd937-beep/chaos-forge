@@ -5,6 +5,7 @@
 
 const IDEAS_KEY = 'chaosforge.ideas.v1';
 const CUSTOM_KEY = 'chaosforge.custom.v1';
+const DRAFT_KEY = 'chaosforge.draft.v1';
 
 const memory = new Map();
 
@@ -46,7 +47,8 @@ function write(key, value) {
   const store = rawStorage();
   if (!store) {
     memory.set(key, value);
-    return true;
+    // 메모리에만 보관되면 새로고침 시 유실될 수 있어 성공으로 취급하지 않는다.
+    return false;
   }
   try {
     store.setItem(key, JSON.stringify(value));
@@ -62,6 +64,20 @@ function uid() {
 }
 
 const Storage = {
+  /** 화면의 작업 초안을 자동 저장한다. 기존 아이디어 보관함과 별도로 관리한다. */
+  saveDraft(draft) {
+    if (!draft || typeof draft !== 'object') return false;
+    return write(DRAFT_KEY, { ...draft, version: 1 });
+  },
+
+  loadDraft() {
+    const draft = read(DRAFT_KEY, null);
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
+        draft.version !== 1 || !draft.results ||
+        typeof draft.results !== 'object' || Array.isArray(draft.results)) return null;
+    return draft;
+  },
+
   /** 저장된 아이디어 전체 (최신순) */
   loadIdeas() {
     const list = read(IDEAS_KEY, []);
@@ -88,14 +104,12 @@ const Storage = {
 
     if (index >= 0) list[index] = record;
     else list.unshift(record);
-    write(IDEAS_KEY, list);
-    return record;
+    return write(IDEAS_KEY, list) ? record : null;
   },
 
   deleteIdea(id) {
     const list = this.loadIdeas().filter((x) => x.id !== id);
-    write(IDEAS_KEY, list);
-    return list;
+    return write(IDEAS_KEY, list) ? list : null;
   },
 
   getIdea(id) {
@@ -130,16 +144,17 @@ const Storage = {
       genres: Array.isArray(entry.genres) ? entry.genres : [],
       weight: typeof entry.weight === 'number' && entry.weight > 0 ? entry.weight : 1
     };
-    if (!record.text) return null;
+    if (!record.text || list.some((item) =>
+      item.generator === record.generator && item.slot === record.slot &&
+      String(item.text).trim().toLocaleLowerCase() === record.text.toLocaleLowerCase()
+    )) return null;
     list.push(record);
-    write(CUSTOM_KEY, list);
-    return record;
+    return write(CUSTOM_KEY, list) ? record : null;
   },
 
   deleteCustom(id) {
     const list = this.loadCustom().filter((x) => x.id !== id);
-    write(CUSTOM_KEY, list);
-    return list;
+    return write(CUSTOM_KEY, list) ? list : null;
   }
 };
 

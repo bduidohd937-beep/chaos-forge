@@ -46,16 +46,51 @@ function seedResults(customKeywords) {
   return seeded;
 }
 
+/** 저장된 초안을 현재 생성기 슬롯 구조에 맞춰 안전하게 복원한다. */
+function restoreResults(draft, customKeywords) {
+  const defaults = seedResults(customKeywords);
+  if (!draft) return defaults;
+
+  for (const gen of GENERATORS) {
+    const saved = draft.results?.[gen.id];
+    if (!saved || typeof saved !== 'object' || !saved.values ||
+        typeof saved.values !== 'object') continue;
+
+    const values = { ...defaults[gen.id].values };
+    const locks = {};
+    for (const slot of gen.slots) {
+      if (typeof saved.values[slot.key] === 'string') {
+        values[slot.key] = saved.values[slot.key].slice(0, 5000);
+      }
+      if (saved.locks?.[slot.key] === true) locks[slot.key] = true;
+    }
+    defaults[gen.id] = { values, locks };
+  }
+  return defaults;
+}
+
 /**
  * @param {{animationMs?: number}} props animationMs=0 이면 슬롯 연출 없이 즉시 표시 (테스트용)
  */
 export default function App({ animationMs = 620 }) {
+  const [draft] = useState(() => Storage.loadDraft());
   const [custom, setCustom] = useState(() => Storage.loadCustom());
-  const [results, setResults] = useState(() => seedResults(Storage.loadCustom()));
-  const [generatorId, setGeneratorId] = useState('story');
-  const [mode, setMode] = useState('hybrid');
-  const [genre, setGenre] = useState('판');
-  const [chaos, setChaos] = useState(3);
+  const [results, setResults] = useState(() => restoreResults(draft, Storage.loadCustom()));
+  const [generatorId, setGeneratorId] = useState(
+    () => (GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story')
+  );
+  const [mode, setMode] = useState(
+    () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'hybrid')
+  );
+  const [genre, setGenre] = useState(() => normalizeGenre(
+    GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story',
+    draft?.genre ?? '판'
+  ));
+  const [chaos, setChaos] = useState(() => {
+    const value = Number(draft?.chaos);
+    return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
+  });
+  const [draftSaved, setDraftSaved] = useState(true);
   const [spinning, setSpinning] = useState({});
   const [spinText, setSpinText] = useState({});
   const [toast, setToast] = useState('');
@@ -70,6 +105,12 @@ export default function App({ animationMs = 620 }) {
   const gen = GENERATOR_MAP[generatorId];
   const current = results[generatorId] ?? { values: {}, locks: {} };
   const filteredIdeas = useMemo(() => Storage.searchIdeas(search), [ideas, search]);
+
+  // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
+  useEffect(() => {
+    const ok = Storage.saveDraft({ generatorId, mode, genre, chaos, results });
+    setDraftSaved(ok);
+  }, [generatorId, mode, genre, chaos, results]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -339,7 +380,7 @@ export default function App({ animationMs = 620 }) {
     }
 
     const firstFilled = gen.slots.map((slot) => values[slot.key]).find(Boolean);
-    Storage.saveIdea({
+    const saved = Storage.saveIdea({
       title: title.trim() || firstFilled || gen.title,
       generator: gen.id,
       mode,
@@ -347,6 +388,10 @@ export default function App({ animationMs = 620 }) {
       chaos,
       values
     });
+    if (!saved) {
+      showToast('저장에 실패했습니다. JSON 파일로 백업해 주세요');
+      return;
+    }
     setTitle('');
     setIdeas(Storage.loadIdeas());
     showToast('아이디어를 저장했습니다');
@@ -356,7 +401,10 @@ export default function App({ animationMs = 620 }) {
     const target = Storage.getIdea(id);
     const ok = target ? window.confirm(`“${target.title}” 아이디어를 삭제할까요?`) : false;
     if (!ok) return;
-    Storage.deleteIdea(id);
+    if (!Storage.deleteIdea(id)) {
+      showToast('삭제 내용을 저장하지 못했습니다');
+      return;
+    }
     setIdeas(Storage.loadIdeas());
     showToast('아이디어를 삭제했습니다');
   };
@@ -387,7 +435,7 @@ export default function App({ animationMs = 620 }) {
   const addCustom = (entry) => {
     const saved = Storage.addCustom(entry);
     if (!saved) {
-      showToast('키워드를 저장하지 못했습니다');
+      showToast('중복 키워드이거나 저장 공간이 부족합니다');
       return;
     }
     setCustom(Storage.loadCustom());
@@ -395,7 +443,10 @@ export default function App({ animationMs = 620 }) {
   };
 
   const deleteCustom = (id) => {
-    Storage.deleteCustom(id);
+    if (!Storage.deleteCustom(id)) {
+      showToast('삭제 내용을 저장하지 못했습니다');
+      return;
+    }
     setCustom(Storage.loadCustom());
     showToast('키워드를 삭제했습니다');
   };
@@ -416,7 +467,7 @@ export default function App({ animationMs = 620 }) {
           </span>
           <div className="brand-text">
             <h1>CHAOS FORGE</h1>
-            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.0</p>
+            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.1</p>
           </div>
         </div>
 
@@ -438,6 +489,12 @@ export default function App({ animationMs = 620 }) {
       </header>
 
       <main className="wrap">
+        <div className="workspace-bar" aria-label="작업 상태">
+          <span className="workspace-name">◈ CHAOS MODE <span>발견하고, 고정하고, 다듬기</span></span>
+          <span className={`autosave-status${draftSaved ? '' : ' is-error'}`} role="status">
+            {draftSaved ? '● 초안 자동 저장됨' : '⚠ 자동 저장 실패 · JSON 백업 권장'}
+          </span>
+        </div>
         <ControlsBar
           genres={gen.genreList}
           genre={genre}
@@ -531,7 +588,7 @@ export default function App({ animationMs = 620 }) {
       </main>
 
       <footer className="site-footer">
-        <p>CHAOS FORGE v1.0 · 외부 API 없이 동작 · 데이터는 브라우저에만 저장됩니다.</p>
+        <p>CHAOS FORGE v1.1 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
       </footer>
 
       <div className={`toast${toast ? ' is-show' : ''}`} id="toast" role="status" aria-live="polite">
