@@ -46,6 +46,7 @@ export default function ResultCard({
     >
       <div className="card-head">
         <span className="card-label">{label}</span>
+        {spinning && <span className="reel-indicator" aria-hidden="true">ROLLING</span>}
         <div className="card-tools">
           <button
             type="button"
@@ -67,7 +68,8 @@ export default function ResultCard({
       <div
         ref={valueRef}
         className="card-value"
-        contentEditable
+        contentEditable={!spinning}
+        aria-readonly={spinning}
         suppressContentEditableWarning
         spellCheck={false}
         role="textbox"
