@@ -126,6 +126,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [toast, setToast] = useState('');
   const [ideas, setIdeas] = useState(() => Storage.loadIdeas());
   const [search, setSearch] = useState('');
+  const [libraryTab, setLibraryTab] = useState('ideas');
   const [title, setTitle] = useState('');
 
   const tickRef = useRef(null);
@@ -173,6 +174,14 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     },
     []
   );
+
+  // SPA 탭 전환 시 이전 화면의 스크롤 위치가 남아서 새 화면 제목이
+  // 고정 헤더 뒤로 가려지는 문제를 방지한다.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [workspacePage]);
 
   /** 전체 생성 (잠긴 항목은 값 유지) */
   const generate = useCallback(
@@ -653,29 +662,38 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             </div>
 
             <div className="chaos-control-deck">
-              <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
-                <span className="reel-presets-label">연출</span>
-                {[
-                  ['slot', '슬롯'],
-                  ['classic', '클래식'],
-                  ['instant', '즉시']
-                ].map(([key, label]) => (
-                  <button type="button" key={key} className="reel-preset"
-                    aria-pressed={reelStyle === key}
-                    onClick={() => { clearAnimations(); setReelStyle(key); }}>
-                    {label}
-                  </button>
-                ))}
+              <div className="chaos-deck-main">
+                <div className="chaos-deck-heading">
+                  <span className="v2-kicker">THE GENERATOR</span>
+                  <strong>준비됐나요? 새로운 조합을 발견하세요.</strong>
+                  <p>마음에 드는 키워드는 잠그고 다시 뽑을 수 있어요.</p>
+                </div>
+                <div className="chaos-primary-actions">
+                  <button type="button" className="btn btn-primary v2-generate" id="generateBtn"
+                    aria-busy={isRolling}
+                    onClick={() => generate()}>{isRolling ? '◈ 추첨 진행 중…' : '◈ 전체 추첨'}</button>
+                  <button type="button" className="btn btn-overdrive" id="overdriveBtn"
+                    title="설정을 바꾸지 않고 이번 추첨에만 혼돈 5 적용"
+                    onClick={overdrive}>⚡ 폭주 추첨</button>
+                </div>
               </div>
-              <div className="chaos-primary-actions">
-                <button type="button" className="btn btn-primary v2-generate" id="generateBtn"
-                  aria-busy={isRolling}
-                  onClick={() => generate()}>{isRolling ? '◈ 추첨 진행 중…' : '◈ 전체 추첨'}</button>
-                <button type="button" className="btn btn-overdrive" id="overdriveBtn"
-                  title="설정을 바꾸지 않고 이번 추첨에만 혼돈 5 적용"
-                  onClick={overdrive}>⚡ 폭주 추첨</button>
-                <button type="button" className="btn btn-ghost" id="unlockAllBtn"
-                  onClick={unlockAll}>잠금 해제</button>
+              <div className="chaos-deck-options">
+                <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
+                  <span className="reel-presets-label">추첨 연출</span>
+                  {[
+                    ['slot', '슬롯'],
+                    ['classic', '클래식'],
+                    ['instant', '즉시']
+                  ].map(([key, label]) => (
+                    <button type="button" key={key} className="reel-preset"
+                      aria-pressed={reelStyle === key}
+                      onClick={() => { clearAnimations(); setReelStyle(key); }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="btn btn-ghost chaos-unlock" id="unlockAllBtn"
+                  onClick={unlockAll}>모든 잠금 해제</button>
               </div>
             </div>
 
@@ -684,6 +702,10 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               {isRolling
                 ? `${activeSpinStyle === 'slot' ? '🎰 슬롯' : '✦ 클래식'} 추첨 진행 중 · ${Object.keys(spinning).length}개 남음 · 순차 확정`
                 : `${lockedCount}개 고정 · ${gen.slots.length - lockedCount}개 재추첨 가능`}
+            </div>
+            <div className="chaos-result-heading">
+              <h3>추첨 결과 <span>{gen.slots.length}개 항목</span></h3>
+              <p>키워드를 클릭해 수정 · <span aria-hidden="true">🔒</span> 고정 · <span aria-hidden="true">↻</span> 개별 재추첨</p>
             </div>
             <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
               id="results" aria-live="off" aria-label="생성 결과">
@@ -743,12 +765,27 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             <div className="v2-intro">
               <p className="v2-kicker">04 / LIBRARY — YOUR CREATIVE ARCHIVE</p>
               <h2 id="libraryTitle">아이디어를 잃지 마세요.</h2>
-              <p>저장한 결과와 사용자 키워드를 관리해요. 데이터는 현재 브라우저에 보관됩니다.</p>
+              <p>저장된 아이디어와 직접 추가한 키워드를 별도 탭으로 관리하세요.</p>
+            </div>
+            <div className="library-switch" role="tablist" aria-label="보관함 카테고리">
+              <button type="button" role="tab" aria-selected={libraryTab === 'ideas'}
+                className={`library-switch-tab${libraryTab === 'ideas' ? ' selected' : ''}`}
+                onClick={() => setLibraryTab('ideas')}>
+                저장된 아이디어 <span>{ideas.length}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={libraryTab === 'custom'}
+                className={`library-switch-tab${libraryTab === 'custom' ? ' selected' : ''}`}
+                onClick={() => setLibraryTab('custom')}>
+                사용자 키워드 <span>{custom.length}</span>
+              </button>
             </div>
             <div className="panels">
-              <IdeasPanel ideas={filteredIdeas} total={ideas.length} search={search}
-                onSearch={setSearch} onLoad={loadIdea} onDelete={deleteIdea} />
-              <CustomPanel custom={custom} onAdd={addCustom} onDelete={deleteCustom} />
+              {libraryTab === 'ideas' ? (
+                <IdeasPanel ideas={filteredIdeas} total={ideas.length} search={search}
+                  onSearch={setSearch} onLoad={loadIdea} onDelete={deleteIdea} />
+              ) : (
+                <CustomPanel custom={custom} onAdd={addCustom} onDelete={deleteCustom} />
+              )}
             </div>
           </section>
         )}
