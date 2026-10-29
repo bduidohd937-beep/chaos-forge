@@ -18,6 +18,7 @@ import { DATA_STORY } from './data/story.js';
 import { DATA_GAME } from './data/game.js';
 import { DATA_CHARACTER } from './data/character.js';
 import { DATA_HERO } from './data/hero.js';
+import { ALPHA3_KEYWORDS } from './data/alpha3.js';
 import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
 import { planGenreSlots } from './composition.js';
 
@@ -215,7 +216,7 @@ export function pickKeyword(pool, opts = {}) {
 export function getPool(generatorId, slotKey, customKeywords = []) {
   const gen = GENERATOR_MAP[generatorId];
   if (!gen) return [];
-  const base = [...(gen.data[slotKey] || [])];
+  const base = [...(gen.data[slotKey] || []), ...(ALPHA3_KEYWORDS[generatorId]?.[slotKey] || [])];
   for (const item of customKeywords) {
     if (item.generator === generatorId && item.slot === slotKey) {
       base.push(K(item.text, item.genres || [], item.genres || [], item.weight || 1));
