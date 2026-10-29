@@ -47,7 +47,8 @@ function write(key, value) {
   const store = rawStorage();
   if (!store) {
     memory.set(key, value);
-    return true;
+    // 메모리에만 보관되면 새로고침 시 유실될 수 있어 성공으로 취급하지 않는다.
+    return false;
   }
   try {
     store.setItem(key, JSON.stringify(value));
