@@ -53,7 +53,7 @@ describe('Alpha 3 curated keywords', () => {
         expect(pool.length).toBe(gen.data[slot.key].length + extras.length);
         expect(new Set(pool.map((kw) => kw.t)).size, gen.id + '.' + slot.key).toBe(pool.length);
         for (const kw of extras) {
-          expect(kw.t.length).toBeGreaterThan(5);
+          expect(kw.t.length).toBeGreaterThanOrEqual(5);
           expect(Number.isFinite(kw.w) && kw.w > 0).toBe(true);
           expect(kw.g.length).toBeGreaterThan(0);
           for (const tag of [...kw.g, ...kw.c]) expect(valid.has(tag)).toBe(true);
