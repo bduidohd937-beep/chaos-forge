@@ -66,6 +66,13 @@ export function genreAffinity(keyword, generatorId, selectedGenre) {
  * 모두 없다면 원본 풀로 돌아간다. 필터 실패로 빈 결과는 만들지 않는다.
  * @param {Function} weightedPick 엔진의 가중치 추첨 함수
  */
+/**
+ * Return a keyword while preserving genre scope, even when the recent
+ * exclusion list exhausts all available in-genre choices.
+ *
+ * A fixed preference is created by the whole-result composition planner.
+ * Unplanned single-slot picks still use the original main/sub 55:45 mix.
+ */
 export function pickWithGenreMix(pool, {
   generatorId,
   genres,
@@ -73,38 +80,58 @@ export function pickWithGenreMix(pool, {
   chaos = 3,
   rng = Math.random,
   weightedPick,
-  chaosOutProbability
+  chaosOutProbability,
+  preferredGenre,
+  exclude = []
 }) {
   if (!pool?.length) return null;
-  if (mode === 'random') return weightedPick(pool, null, rng);
+  const recent = new Set((Array.isArray(exclude) ? exclude : [])
+    .filter((text) => typeof text === 'string')
+    .map((text) => text.trim().toLocaleLowerCase()));
+
+  const unseen = (items) => {
+    const fresh = items.filter((kw) => !recent.has(kw.t.trim().toLocaleLowerCase()));
+    return fresh.length ? fresh : items;
+  };
+  if (mode === 'random') return weightedPick(unseen(pool), null, rng);
+
   const { main, subs } = normalizeGenreSelection(generatorId, genres);
   const selected = [main, ...subs];
   const affinity = (kw, genre) => genreAffinity(kw, generatorId, genre);
-  const unionFit = pool.filter((kw) => selected.some((g) => affinity(kw, g) > 0));
+  const pickFit = (items, genre) => weightedPick(
+    unseen(items),
+    (kw) => (Number(kw.w) > 0 ? kw.w : 1) * affinity(kw, genre),
+    rng
+  );
+
+  // Forced genre assignments are made only for slots that have matching data.
+  // If all fresh matches have been seen recently, reuse a fitting value
+  // rather than allow a mismatched keyword to leak through the constraint.
+  if (selected.includes(preferredGenre)) {
+    const exact = pool.filter((kw) => affinity(kw, preferredGenre) > 0);
+    if (exact.length) return pickFit(exact, preferredGenre);
+  }
+
+  const fits = pool.filter((kw) => selected.some((g) => affinity(kw, g) > 0));
   const outside = pool.filter((kw) => selected.every((g) => affinity(kw, g) === 0));
 
   if (mode === 'hybrid' && outside.length &&
       rng() < chaosOutProbability(chaos)) {
-    return weightedPick(outside, null, rng);
+    return weightedPick(unseen(outside), null, rng);
   }
 
-  if (!unionFit.length) return weightedPick(pool, null, rng);
+  if (!fits.length) return weightedPick(unseen(pool), null, rng);
 
   const candidates = selected
     .map((g, idx) => ({
       genre: g,
-      priority: idx === 0 ? 0.55 : 0.45 / subs.length,
+      priority: idx === 0 ? (subs.length ? 0.55 : 1) : 0.45 / subs.length,
       options: pool.filter((kw) => affinity(kw, g) > 0)
     }))
     .filter(({ options }) => options.length > 0);
-  const group = weightedPick(
-    candidates,
-    ({ priority }) => priority,
-    rng
-  );
-  return weightedPick(
-    group.options,
-    (kw) => (Number(kw.w) > 0 ? kw.w : 1) * affinity(kw, group.genre),
-    rng
-  );
+
+  // Preserve the relative 55:45 group weighting rather than favoring genres
+  // with large underlying pools; genre variety depends on user selection.
+  const group = weightedPick(candidates, ({ priority }) => priority, rng);
+  return pickFit(group.options, group.genre);
 }
