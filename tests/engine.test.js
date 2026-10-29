@@ -306,3 +306,37 @@ describe('로컬 저장소', () => {
     expect(Storage.loadCustom()).toHaveLength(0);
   });
 });
+
+
+describe('V1.1 로컬 초안 및 키워드 검증', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('초안은 독립된 저장 공간에서 저장 및 재조회된다', () => {
+    expect(Storage.loadDraft()).toBeNull();
+    expect(Storage.saveDraft({
+      generatorId: 'story',
+      mode: 'hybrid',
+      genre: '판',
+      chaos: 3,
+      results: { story: { values: { setting: '나만의 세계' }, locks: { setting: true } } }
+    })).toBe(true);
+    expect(Storage.loadDraft().results.story.values.setting).toBe('나만의 세계');
+    expect(Storage.loadIdeas()).toHaveLength(0);
+  });
+
+  it('손상되거나 호환되지 않는 초안은 무시한다', () => {
+    localStorage.setItem('chaosforge.draft.v1', '{oops');
+    expect(Storage.loadDraft()).toBeNull();
+    localStorage.setItem('chaosforge.draft.v1', JSON.stringify({ version: 2, results: {} }));
+    expect(Storage.loadDraft()).toBeNull();
+  });
+
+  it('같은 생성기·항목의 중복 키워드를 거부한다', () => {
+    const entry = { generator: 'story', slot: 'setting', text: '유리 성채', genres: ['판'] };
+    expect(Storage.addCustom(entry)).not.toBeNull();
+    expect(Storage.addCustom({ ...entry, text: ' 유리 성채 ' })).toBeNull();
+    expect(Storage.loadCustom()).toHaveLength(1);
+    expect(Storage.addCustom({ ...entry, slot: 'event' })).not.toBeNull();
+    expect(Storage.loadCustom()).toHaveLength(2);
+  });
+});
