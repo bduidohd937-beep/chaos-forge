@@ -2827,3 +2827,209 @@ input[type="range"]::-moz-range-thumb {
   .new-idea-confirm-actions .btn { flex: 1; }
   .chaos-screen .result-card .card-lock-state { font-size: 10px; }
 }
+
+
+/* ============================================================
+   UX 2.2 — clean separation of positive taste and negative bans
+   with inline CHAOS editing instead of surprise page navigation.
+   ============================================================ */
+.ux22-preference-cards {
+  display: grid;
+  gap: 12px;
+}
+.ux22-preference-cards > .v2-panel { min-width: 0; }
+.preference-panel .dna-two-col { margin: 0; }
+.preference-panel .dna-advanced-heading h3 {
+  margin: 4px 0;
+  font-size: 18px;
+}
+.preference-panel .dna-advanced-heading p:last-child {
+  line-height: 1.55;
+}
+.preference-panel .dna-controls { gap: 0; }
+.dna-likes-details,
+.dna-audit-details {
+  margin-top: 11px;
+  border: 1px solid #35415b;
+  border-radius: 9px;
+  background: rgba(14,21,39,.48);
+}
+.dna-likes-details > summary,
+.dna-audit-details > summary {
+  color: #cce2f6;
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+}
+.dna-likes-list {
+  border-top: 1px solid #334159;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 11px 14px 14px;
+}
+.dna-likes-list .dna-hint { margin: 0; }
+.dna-like-chip {
+  color: #ffe5aa;
+  border-color: #a88c5c;
+  background: rgba(143,104,32,.16);
+}
+.preference-panel .dna-audit {
+  padding: 10px 14px 12px;
+  margin: 0;
+  display: block;
+}
+.preference-panel .dna-audit p { margin-top: 3px; }
+
+.ban-panel {
+  padding: clamp(17px,2vw,23px);
+  border: 1px solid #49435e;
+  border-radius: 12px;
+  background: rgba(24,25,44,.86);
+}
+.ban-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+  flex-wrap: wrap;
+}
+.ban-panel-heading { min-width: 0; flex: 1 1 290px; }
+.ban-panel-heading h3 {
+  color: #f7eff2;
+  margin: 5px 0 6px;
+  font-size: 18px;
+}
+.ban-panel-heading p:not(.v2-kicker) {
+  color: #bbcadc;
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.6;
+}
+.ban-panel-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px 12px;
+}
+.ban-panel-summary .dna-ban-count { font-size: 12px; }
+.ban-manage-toggle {
+  min-height: 41px;
+  white-space: nowrap;
+  padding: 9px 13px;
+  border-color: #a48dae;
+  color: #fae5f1;
+  font-weight: 800;
+  font-size: 12px;
+}
+.ban-manage-toggle[aria-expanded="true"] {
+  background: rgba(155,106,151,.2);
+  border-color: #dfb0d5;
+}
+.ban-panel-preview {
+  font-size: 12px;
+  color: #c1cede;
+  margin: 11px 0 0;
+}
+.ban-panel .dna-ban-inner {
+  border-top: 1px solid #41435a;
+  margin-top: 14px;
+  padding: 17px 0 0;
+  display: grid;
+  gap: 19px;
+}
+.ban-panel .dna-ban-mode > strong { margin-bottom: 11px; }
+.ban-panel .dna-ban-mode .dna-option-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.ban-panel .dna-ban-mode .dna-choice { min-height: 70px; }
+.ban-panel .dna-ban-mode .dna-choice small { line-height: 1.6; }
+.ban-panel .dna-ban-fieldset > legend { font-size: 14px; }
+.ban-panel .dna-exact-list .dna-hint { margin: 0; }
+.ban-panel .dna-exact form .btn { min-height: 42px; }
+
+.chaos-screen .dna-active-summary .dna-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.chaos-screen .dna-quick-actions .btn {
+  margin: 0;
+  font-size: 12px;
+  padding: 8px 11px;
+  min-height: 37px;
+}
+.chaos-screen .dna-quick-actions .btn[aria-expanded="true"] {
+  border-color: #c4a5f0;
+  background: rgba(122,99,182,.27);
+  color: #fff;
+}
+.chaos-preference-editor {
+  margin: 0 0 14px;
+  padding: 13px;
+  border: 1px solid #4e5272;
+  border-radius: 12px;
+  background: rgba(15,25,44,.92);
+}
+.chaos-preference-editor > .preference-panel,
+.chaos-preference-editor > .ban-panel {
+  border: 1px solid #394962;
+  box-shadow: none;
+}
+.chaos-preference-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 11px;
+  color: #b9dce9;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.chaos-preference-heading .btn {
+  min-height: 35px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-left: auto;
+}
+.chaos-screen .mutation-controls-wrap {
+  align-items: flex-start;
+}
+.chaos-screen .mutation-controls-wrap .mutation-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+.chaos-screen .mutation-controls-wrap .mutation-btn small {
+  font: 500 11px var(--sans);
+  color: inherit;
+}
+.mutation-explainer {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 0;
+  color: #a9c8dd;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 800px) {
+  .ban-panel-header { align-items: flex-start; }
+  .ban-panel-summary { justify-content: flex-start; }
+  .chaos-screen .chaos-context-strip .dna-active-summary { flex: 1 1 100%; }
+}
+@media (max-width: 540px) {
+  .ban-panel .dna-ban-mode .dna-option-row { grid-template-columns: 1fr; }
+  .ban-panel-summary { width: 100%; justify-content: space-between; }
+  .ban-manage-toggle { flex: 1 1 auto; }
+  .chaos-screen .dna-active-summary .dna-quick-actions { margin-left: 0; width: 100%; }
+  .chaos-screen .dna-quick-actions .btn { flex: 1 1 auto; }
+  .chaos-preference-editor { padding: 9px; }
+  .chaos-screen .mutation-controls-wrap .mutation-btn { padding: 6px 7px; }
+  .chaos-screen .mutation-controls-wrap .mutation-btn small { font-size: 10px; }
+}
