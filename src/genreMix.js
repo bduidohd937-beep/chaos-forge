@@ -88,9 +88,10 @@ export function pickWithGenreMix(pool, {
   const recent = new Set((Array.isArray(exclude) ? exclude : [])
     .filter((text) => typeof text === 'string')
     .map((text) => text.trim().toLocaleLowerCase()));
-
+  const isRecent = kw => [kw.t,...Object.values(kw.forms||{})]
+    .some(text=>typeof text==='string'&&recent.has(text.trim().toLocaleLowerCase()));
   const unseen = (items) => {
-    const fresh = items.filter((kw) => !recent.has(kw.t.trim().toLocaleLowerCase()));
+    const fresh = items.filter((kw) => !isRecent(kw));
     return fresh.length ? fresh : items;
   };
   if (mode === 'random') return weightedPick(unseen(pool), null, rng);
@@ -133,7 +134,7 @@ export function pickWithGenreMix(pool, {
   // Preserve the relative 55:45 group weighting rather than favoring genres
   // with large underlying pools; genre variety depends on user selection.
   const groupsWithFreshOptions = candidates.filter(({ options }) =>
-    options.some((kw) => !recent.has(kw.t.trim().toLocaleLowerCase()))
+    options.some((kw) => !isRecent(kw))
   );
   const activeGroups = groupsWithFreshOptions.length ? groupsWithFreshOptions : candidates;
   const group = weightedPick(activeGroups, ({ priority }) => priority, rng);
