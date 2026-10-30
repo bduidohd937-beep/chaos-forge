@@ -932,6 +932,12 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
           <p>이전에 시작한 복원을 안전하게 되돌리지 못해 자동 저장을 중지했습니다. 이 브라우저의 데이터를 초기화하지 마세요.</p>
         </div>
       )}
+      {backupRecovery === 'unavailable' && (
+        <div className="wrap v2-restore-warning" role="alert">
+          <strong>⚠ 브라우저 저장소를 사용할 수 없어요.</strong>
+          <p>작업은 일시적으로 보일 수 있지만 새로고침 후 사라질 수 있습니다. 저장소 권한을 확인해 주세요.</p>
+        </div>
+      )}
       {backupRecovery === 'recovered' && (
         <div className="wrap v2-recovery-info" role="status">
           중단됐던 복원을 감지해 이전 데이터를 복구했습니다.
