@@ -1250,7 +1250,12 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <p>저장된 아이디어와 직접 추가한 키워드를 별도 탭으로 관리하세요.</p>
             </div>
             <WorkspaceBackupPanel
-              currentCounts={{ ideas: ideas.length, custom: custom.length, archives: archives.length }}
+              currentCounts={{
+                ideas: ideas.length, custom: custom.length, archives: archives.length,
+                forgeDocs: Object.values(forgeDocs).filter(doc => doc && typeof doc === 'object' &&
+                  (String(doc.title || '').trim() || String(doc.notes || '').trim() ||
+                   Object.values(doc.fields || {}).some(value => typeof value === 'string' && value.trim()))).length
+              }}
               onBackup={downloadFullBackup} onRestore={restoreFullBackup}
             />
             <div className="library-switch" role="tablist" aria-label="보관함 카테고리">
