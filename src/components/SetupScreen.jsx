@@ -45,8 +45,8 @@ export default function SetupScreen({
         <p>창작 유형과 장르, 생성 스타일을 선택하세요. 더 자세한 조절은 아래 고급 설정에서 할 수 있어요.</p>
       </div>
 
-      <div className="quick-setup-grid">
-        <section className="v2-panel setup-block quick-setup-block" aria-labelledby="generatorHeading">
+      <div className="quick-setup-flow">
+        <section className="v2-panel setup-block quick-setup-block quick-generator-step" aria-labelledby="generatorHeading">
           <div className="setup-block-head">
             <span className="setup-step">01</span>
             <div>
@@ -54,23 +54,25 @@ export default function SetupScreen({
               <p>창작할 작품 유형을 선택해 주세요.</p>
             </div>
           </div>
-          <div className="setup-generator-grid">
+          <div className="setup-generator-grid quick-generator-tabs" role="group" aria-label="창작 유형 선택">
             {GENERATORS.map(gen => (
               <button type="button" key={gen.id}
                 className={`setup-generator${generatorId === gen.id ? ' selected' : ''}`}
                 aria-pressed={generatorId === gen.id}
+                aria-label={`${gen.tab} 생성기 선택`}
+                title={gen.desc}
                 onClick={() => onGeneratorChange(gen.id)}>
                 <span className="setup-generator-symbol" aria-hidden="true">
                   {gen.id === 'story' ? '✧' : gen.id === 'game' ? '◈' : gen.id === 'character' ? '◇' : '⚔'}
                 </span>
                 <strong>{gen.tab}</strong>
-                <small>{gen.desc}</small>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="v2-panel setup-block quick-setup-block" aria-labelledby="genreHeading">
+        <div className="quick-setup-grid">
+          <section className="v2-panel setup-block quick-setup-block" aria-labelledby="genreHeading">
           <div className="setup-block-head">
             <span className="setup-step">02</span>
             <div>
@@ -140,7 +142,6 @@ export default function SetupScreen({
             </div>
           )}
         </section>
-      </div>
 
       <section className="v2-panel quick-style" aria-labelledby="quickStyleHeading">
         <div className="setup-block-head">
@@ -185,6 +186,8 @@ export default function SetupScreen({
           </fieldset>
         </div>
       </section>
+        </div>
+      </div>
 
       <section className="quick-setup-launch" aria-label="현재 선택 및 생성 시작">
         <div className="quick-setup-review">
