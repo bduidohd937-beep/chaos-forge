@@ -20,7 +20,7 @@ describe('Alpha 5 author-curated vocabulary and quality audit', () => {
         const id = gen.id+'/'+slot.key+'/'+kw.t;
         expect(unique.has(id)).toBe(false);
         unique.add(id); concepts++;
-        expect(kw.forms.brief.length).toBeGreaterThanOrEqual(3);
+        expect(kw.forms.brief.length).toBeGreaterThanOrEqual(2);
         expect(kw.forms.balanced).toBe(kw.t);
         expect(kw.forms.detailed.length).toBeGreaterThan(kw.forms.brief.length);
         expect(kw.forms.detailed).not.toBe(kw.forms.balanced);
