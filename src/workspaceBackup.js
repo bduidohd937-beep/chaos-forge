@@ -33,7 +33,7 @@ function validateDraft(draft, description) {
           (doc.title != null && (typeof doc.title !== 'string' || doc.title.length > 100)) ||
           (doc.notes != null && (typeof doc.notes !== 'string' || doc.notes.length > 20000)) ||
           (doc.fields != null && (!validStringMap(doc.fields) ||
-            Object.values(doc.fields).some(value => value.length > 12000))))) {
+            Object.values(doc.fields).some(value => value.length > 12000)))) {
         fail(`${description}: FORGE 문서의 일부 항목이 손상됐습니다.`);
       }
     }
