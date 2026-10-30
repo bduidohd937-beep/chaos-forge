@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ALL_GENRES, GENERATORS, MODES } from '../engine.js';
+import CreativeDnaPanel from './CreativeDnaPanel.jsx';
 
 const FEATURED_SUBGENRES = new Set([
   '로', '미', '코', '공', 'SF', '무', '일', '스', '액션', 'RPG', '생존'
@@ -13,7 +14,7 @@ const MODE_DESCRIPTIONS = {
 
 export default function SetupScreen({
   generatorId, onGeneratorChange, mainGenre, subgenres, onMainChange, onSubChange,
-  mode, onModeChange, chaos, onChaosChange, onBegin
+  mode, onModeChange, chaos, onChaosChange, onBegin, dna, onDNAChange, keywordCoverage
 }) {
   const [showAllGenres, setShowAllGenres] = useState(false);
   const [genreSearch, setGenreSearch] = useState('');
@@ -175,6 +176,9 @@ export default function SetupScreen({
             <span className="setup-footnote">기존 결과는 보존되고, 다음 추첨에 새 설정이 적용됩니다.</span>
           </section>
         </aside>
+      </div>
+      <div className="setup-dna-stage">
+        <CreativeDnaPanel dna={dna} onChange={onDNAChange} coverage={keywordCoverage}/>
       </div>
     </section>
   );
