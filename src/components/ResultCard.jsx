@@ -51,6 +51,10 @@ export default function ResultCard({
     >
       <div className="card-head">
         <span className="card-label">{label}</span>
+        <span className={`card-lock-state${locked ? ' is-locked' : ''}`}
+          title={locked ? '현재 고정: 다음 전체 추첨에서도 이 내용은 유지됩니다' : '현재 열림: 다음 전체 추첨에서 이 내용은 바뀔 수 있습니다'}>
+          {locked ? '🔒 고정 · 유지' : '🔓 열림 · 재추첨'}
+        </span>
         {spinning && <span className="reel-indicator" aria-hidden="true">ROLLING</span>}
         {settled && !spinning && <span className="reel-indicator is-done" aria-hidden="true">✦ 결정!</span>}
         <div className="card-tools">
@@ -59,7 +63,7 @@ export default function ResultCard({
             className={`icon-btn js-lock${locked ? ' is-on' : ''}`}
             aria-pressed={locked}
             aria-label={locked ? `${label} 잠금 해제` : `${label} 잠그기`}
-            title={locked ? '잠금 해제' : '이 항목 잠금'}
+            title={locked ? '잠금 해제 → 다음 추첨부터 이 카드도 변경' : '카드 고정 → 다음 추첨에서 이 내용 유지'}
             onClick={onLock}
             dangerouslySetInnerHTML={{ __html: locked ? ICONS.lockClosed : ICONS.lockOpen }}
           />
@@ -81,7 +85,7 @@ export default function ResultCard({
             type="button"
             className="icon-btn js-reroll"
             aria-label={`${label} 다시 뽑기`}
-            title="이 항목만 재추첨"
+            title={locked ? '고정된 카드입니다. 잠금을 해제하면 다시 뽑을 수 있어요' : '이 카드만 다시 뽑기'}
             onClick={onReroll}
             dangerouslySetInnerHTML={{ __html: ICONS.refresh }}
           />
