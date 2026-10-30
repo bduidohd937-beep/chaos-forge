@@ -906,6 +906,36 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <p>마음에 드는 설정은 잠그고, 나머지는 원하는 만큼 다시 뽑으세요.</p>
             </div>
 
+            {sessionPhase !== 'active' && (
+              <section className="session-guide" aria-label="아이디어 시작 안내">
+                <div className="session-guide-copy">
+                  <strong>{sessionPhase === 'sample'
+                    ? '✧ 처음 오셨나요? 아래 키워드는 샘플 미리보기예요.'
+                    : '↺ 이전에 작성하던 작업을 자동으로 복원했어요.'}</strong>
+                  <p>{sessionPhase === 'sample'
+                    ? '샘플을 구경하거나, 첫 추첨으로 나만의 아이디어를 시작해 보세요. 처음에는 잠긴 카드가 없어요.'
+                    : '현재 결과·잠금·FORGE 작성 내용이 보존되어 있어요. 그대로 이어서 작업하거나 안전하게 새 아이디어를 만들 수 있어요.'}</p>
+                </div>
+                <div className="session-guide-actions">
+                  {sessionPhase === 'sample' ? (
+                    <>
+                      <button type="button" className="btn btn-primary" id="firstIdeaBtn"
+                        onClick={startFresh}>◈ 첫 아이디어 뽑기</button>
+                      <button type="button" className="btn btn-outline"
+                        onClick={() => setWorkspacePage('setup')}>설정부터 고르기</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn btn-primary" id="resumeIdeaBtn"
+                        onClick={() => setSessionPhase('active')}>↺ 이전 작업 이어하기</button>
+                      <button type="button" className="btn btn-outline"
+                        onClick={() => setConfirmNew(true)}>새 아이디어 시작</button>
+                    </>
+                  )}
+                </div>
+              </section>
+            )}
+
             <div className="chaos-toolbar">
               <nav className="tabs" id="generatorTabs" role="tablist" aria-label="생성기 선택">
                 {GENERATORS.map((g) => (
@@ -917,10 +947,48 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                   </button>
                 ))}
               </nav>
-              <button type="button" className="v2-edit-setup" onClick={() => { setSetupAdvancedEntry(false); setWorkspacePage('setup'); }}>
-                설정 편집 ↗
-              </button>
+              <div className="chaos-toolbar-actions">
+                <button type="button" className="v2-edit-setup" onClick={() => { setSetupAdvancedEntry(false); setWorkspacePage('setup'); }}>
+                  설정 편집 ↗
+                </button>
+                <button type="button" className="v2-new-idea" id="newIdeaBtn"
+                  onClick={() => sessionPhase === 'sample' ? startFresh() : setConfirmNew(true)}>
+                  + 새 아이디어
+                </button>
+              </div>
             </div>
+            {confirmNew && (
+              <div className="new-idea-confirm" role="group" aria-label="새 아이디어 확인">
+                <div>
+                  <strong>새 아이디어를 시작할까요?</strong>
+                  <p>지금 작성한 결과·잠금·FORGE 설정집은 <b>이전 작업 기록에 보관</b>한 뒤, 현재 창작 유형만 새로 시작해요. 다른 유형의 작업은 그대로 유지됩니다.</p>
+                </div>
+                <div className="new-idea-confirm-actions">
+                  <button type="button" className="btn btn-outline" onClick={() => setConfirmNew(false)}>취소</button>
+                  <button type="button" className="btn btn-primary" id="confirmNewIdeaBtn"
+                    onClick={startFresh}>이전 작업 보관하고 새로 만들기</button>
+                </div>
+              </div>
+            )}
+            {archives.length > 0 && (
+              <details className="session-history" aria-label="이전 작업 기록">
+                <summary>↺ 보관된 이전 작업 {archives.length}개 · 다시 불러오기</summary>
+                <div className="session-history-list">
+                  {archives.map(item => (
+                    <div key={item.id} className="session-history-item">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <small>{new Date(item.savedAt).toLocaleString('ko-KR')} · {GENERATOR_MAP[item.generatorId]?.tab || '작업'}</small>
+                      </div>
+                      <button type="button" className="btn btn-outline"
+                        onClick={() => restoreArchive(item.id)}
+                        aria-label={`${item.label} 이전 작업 불러오기`}>불러오기</button>
+                    </div>
+                  ))}
+                </div>
+                <p>기록은 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 복원할 수 없으므로 중요한 작품은 별도 백업해 주세요.</p>
+              </details>
+            )}
 
             <div className="chaos-context-strip" aria-label="현재 추첨 설정">
               <div className="chaos-formula" aria-label="현재 장르 설정">
@@ -943,8 +1011,8 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <div className="chaos-deck-main">
                 <div className="chaos-deck-heading">
                   <span className="v2-kicker">THE GENERATOR</span>
-                  <strong>준비됐나요? 새로운 조합을 발견하세요.</strong>
-                  <p>마음에 드는 키워드는 잠그고 다시 뽑을 수 있어요.</p>
+                  <strong>마음에 드는 카드는 고정하고, 나머지는 다시 뽑으세요.</strong>
+                  <p>🔒 고정된 카드는 유지 · 🔓 열린 카드는 다음 추첨에서 변경</p>
                 </div>
                 <div className="chaos-primary-actions">
                   <button type="button" className="btn btn-primary v2-generate" id="generateBtn"
@@ -994,11 +1062,17 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
               {isRolling
                 ? `${activeSpinStyle === 'slot' ? '🎰 슬롯' : '✦ 클래식'} 추첨 진행 중 · ${Object.keys(spinning).length}개 남음 · 순차 확정`
-                : `${lockedCount}개 고정 · ${gen.slots.length - lockedCount}개 재추첨 가능`}
+                : `${lockedCount}개 고정(유지) · ${gen.slots.length - lockedCount}개 열림(재추첨 가능)`}
             </div>
+            {lockedCount === gen.slots.length && (
+              <div className="all-locked-help" role="status">
+                <span>🔒 모든 카드가 고정되어 있어요. 잠금을 해제해야 다시 뽑을 수 있어요.</span>
+                <button type="button" className="btn btn-outline" onClick={unlockAll}>전체 잠금 해제하기</button>
+              </div>
+            )}
             <div className="chaos-result-heading">
               <h3>추첨 결과 <span>{gen.slots.length}개 항목</span></h3>
-              <p>키워드를 클릭해 수정 · <span aria-hidden="true">🔒</span> 고정 · <span aria-hidden="true">↻</span> 개별 재추첨</p>
+              <p>🔒 고정 = 다음 추첨에도 유지 · 🔓 열림 = 변경 가능 · ↻ 카드만 재추첨</p>
             </div>
             <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
               id="results" aria-live="off" aria-label="생성 결과">
