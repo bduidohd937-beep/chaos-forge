@@ -269,18 +269,20 @@ export function generateResult(generatorId, opts = {}) {
   if (!gen) return {};
   const locks = opts.locks || {};
   const values = opts.values || {};
+  const enabled = opts.enabled || {};
   const recent = opts.recent || {};
   const result = {};
   const pools = Object.fromEntries(gen.slots.map((slot) => {
     return [slot.key, getEligiblePool(generatorId, slot.key, opts.custom, opts.dna)];
   }));
+  const activeSlots = gen.slots.filter((slot) => enabled[slot.key] !== false);
   const assignments = opts.genres
     ? planGenreSlots({
       generatorId,
       genres: opts.genres,
       mode: opts.mode,
       chaos: opts.chaos,
-      slots: gen.slots,
+      slots: activeSlots,
       pools,
       locks,
       values
@@ -288,6 +290,10 @@ export function generateResult(generatorId, opts = {}) {
     : {};
 
   for (const slot of gen.slots) {
+    if (enabled[slot.key] === false) {
+      result[slot.key] = typeof values[slot.key] === 'string' ? values[slot.key] : '';
+      continue;
+    }
     if (locks[slot.key]) {
       result[slot.key] = typeof values[slot.key] === 'string' ? values[slot.key] : '';
       continue;
@@ -318,6 +324,7 @@ export function generateResult(generatorId, opts = {}) {
 
 /** 항목별 재추첨 */
 export function rerollSlot(generatorId, slotKey, opts = {}) {
+  if (opts.enabled?.[slotKey] === false) return opts.previous || '';
   const pool = getEligiblePool(generatorId, slotKey, opts.custom, opts.dna);
   const exclude = [
     ...(Array.isArray(opts.recent) ? opts.recent.slice(-4) : []),
@@ -328,13 +335,14 @@ export function rerollSlot(generatorId, slotKey, opts = {}) {
 }
 
 /** Preview counts and strict BAN shortages without altering any saved results. */
-export function auditDNACoverage(generatorId, dna, custom = [], locks = {}, values = {}) {
+export function auditDNACoverage(generatorId, dna, custom = [], locks = {}, values = {}, enabled = {}) {
   const gen = GENERATOR_MAP[generatorId];
   if (!gen) return { empty: [], blockedLocked: [], available: 0 };
   const d = normalizeDNA(dna);
   const empty = [], blockedLocked = [];
   let available = 0;
   for (const slot of gen.slots) {
+    if (enabled[slot.key] === false) continue;
     const pool = getPool(generatorId,slot.key,custom);
     const allowed = getEligiblePool(generatorId,slot.key,custom,d);
     available += allowed.length;

@@ -22,12 +22,18 @@ export default function SetupScreen({
   generatorId, onGeneratorChange, mainGenre, subgenres, onMainChange, onSubChange,
   mode, onModeChange, chaos, onChaosChange, onBegin, dna, onDNAChange, keywordCoverage,
   initialAdvanced = false
+  , enabledSlots = {}, onToggleSlot
 }) {
   const [subOpen, setSubOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(initialAdvanced);
   const [showAllGenres, setShowAllGenres] = useState(false);
   const [genreSearch, setGenreSearch] = useState('');
   const needle = genreSearch.trim().toLocaleLowerCase();
+  const generator = GENERATORS.find((item) => item.id === generatorId);
+  // Keep the legacy combined picker available for saved-work compatibility;
+  // the generator's own list is shown first and the remaining vocabulary is
+  // retained as an explicitly separate "세계관·테마" group below.
+  const genreOptions = ALL_GENRES;
   const filteredSubgenres = ALL_GENRES.filter((item) => {
     if (item.k === mainGenre) return false;
     if (needle) return item.n.toLocaleLowerCase().includes(needle);
@@ -70,6 +76,17 @@ export default function SetupScreen({
               </button>
             ))}
           </div>
+          <div className="slot-settings" aria-label="생성 슬롯 설정">
+            <div className="setup-block-head slot-settings-head"><div><h4>사용할 구성 요소</h4><p>끄면 추첨·재추첨·품질 검사에서 제외되고 값은 보존돼요.</p></div></div>
+            <div className="slot-toggle-grid">
+              {(GENERATORS.find((item) => item.id === generatorId)?.slots || []).map((slot) => {
+                const on = enabledSlots[slot.key] !== false;
+                return <button type="button" key={slot.key} className={`slot-setting${on ? ' selected' : ''}`} aria-pressed={on} onClick={() => onToggleSlot?.(slot.key)}>
+                  <span>{on ? '✓' : '○'}</span>{slot.label}<small>{on ? '사용' : '비활성'}</small>
+                </button>;
+              })}
+            </div>
+          </div>
         </section>
 
         <div className="quick-setup-grid">
@@ -85,7 +102,7 @@ export default function SetupScreen({
             <label htmlFor="genreSelect">메인 장르 <span className="required-mark">필수 · 1개</span></label>
             <select className="input" id="genreSelect" value={mainGenre}
               onChange={event => onMainChange(event.target.value)}>
-              {ALL_GENRES.map(item => <option key={item.k} value={item.k}>{item.n}</option>)}
+              {genreOptions.map(item => <option key={item.k} value={item.k}>{item.n}</option>)}
             </select>
           </div>
           <div className="quick-sub-summary">

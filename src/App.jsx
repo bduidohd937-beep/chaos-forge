@@ -71,6 +71,18 @@ function seedResults(customKeywords) {
   return seeded;
 }
 
+function defaultEnabled() {
+  return Object.fromEntries(GENERATORS.map((gen) => [gen.id, Object.fromEntries(gen.slots.map((slot) => [slot.key, true]))]));
+}
+function restoreEnabled(draft) {
+  const defaults = defaultEnabled();
+  for (const gen of GENERATORS) for (const slot of gen.slots) {
+    const value = draft?.enabledSlots?.[gen.id]?.[slot.key];
+    if (typeof value === 'boolean') defaults[gen.id][slot.key] = value;
+  }
+  return defaults;
+}
+
 /** 최근 4회 기록은 슬롯별로만 보관하며 예전 초안에는 없어도 된다. */
 function restoreRecentHistory(draft) {
   const source = draft?.recentHistory;
@@ -149,6 +161,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [archives, setArchives] = useState(() => Storage.loadDraftArchives());
   const [custom, setCustom] = useState(() => Storage.loadCustom());
   const [results, setResults] = useState(() => restoreResults(draft, Storage.loadCustom()));
+  const [enabledSlots, setEnabledSlots] = useState(() => restoreEnabled(draft));
   const recentHistoryRef = useRef(restoreRecentHistory(draft));
   const [generatorId, setGeneratorId] = useState(
     () => (GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story')
@@ -220,9 +233,9 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       setDraftSaved(false);
       return;
     }
-    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
+    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, enabledSlots, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna, sessionPhase, backupRecovery]);
+  }, [generatorId, mode, genre, subgenres, chaos, results, enabledSlots, reelStyle, workspacePage, forgeDocs, dna, sessionPhase, backupRecovery]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -275,8 +288,10 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       const snapshot = options.fresh
         ? { values: {}, locks: {} }
         : (results[gid] ?? { values: {}, locks: {} });
-      const open = target.slots.filter((slot)=>!snapshot.locks[slot.key]);
-      if (target.slots.every((slot) => snapshot.locks[slot.key])) {
+      const active = target.slots.filter((slot) => enabledSlots[gid]?.[slot.key] !== false);
+      const open = active.filter((slot)=>!snapshot.locks[slot.key]);
+      if (!active.length) { showToast('활성화된 슬롯이 하나 이상 필요해요. 설정에서 슬롯을 켜 주세요'); return; }
+      if (active.every((slot) => snapshot.locks[slot.key])) {
         showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
         return;
       }
@@ -295,7 +310,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       const drawLocks = preserved
         ? {...snapshot.locks,[preserved.key]:true}
         : snapshot.locks;
-      const shortage = auditDNACoverage(gid,drawDNA,custom,drawLocks,snapshot.values);
+      const shortage = auditDNACoverage(gid,drawDNA,custom,drawLocks,snapshot.values,enabledSlots[gid]);
       if (shortage.empty.length) {
         showToast('BAN 설정으로 후보가 없는 항목: '+shortage.empty.slice(0,3).join(' · ')+'. 설정에서 밴을 줄여 주세요.');
         return;
@@ -316,6 +331,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         dna: drawDNA,
         locks: drawLocks,
         values: snapshot.values,
+        enabled: enabledSlots[gid],
         recent: options.fresh ? {} : (recentHistoryRef.current[gid] || {}),
         previousTopics: Object.values(snapshot.values).flatMap(text=>deriveTopics({t:text}))
       });
@@ -401,7 +417,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         showToast(completion);
       }
     },
-    [generatorId, mode, genre, subgenres, chaos, results, custom, dna, reelStyle, animationMs, clearAnimations, showToast]
+    [generatorId, mode, genre, subgenres, chaos, results, enabledSlots, custom, dna, reelStyle, animationMs, clearAnimations, showToast]
   );
 
   const reroll = (slotKey) => {
@@ -410,14 +426,14 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       showToast('잠긴 항목은 재추첨되지 않습니다');
       return;
     }
-    const available = auditDNACoverage(generatorId,dna,custom,current.locks,current.values);
+    const available = auditDNACoverage(generatorId,dna,custom,current.locks,current.values,enabledSlots[generatorId]);
     if (available.empty.length && available.empty.includes(gen.slots.find(s=>s.key===slotKey)?.label)) {
       showToast('차단 규칙 때문에 이 슬롯에 선택 가능한 키워드가 없어요.');
       return;
     }
     const text = rerollSlot(generatorId, slotKey, {
       mode, genre, genres: { main: genre, subs: subgenres },
-      chaos, custom, dna, previous: current.values[slotKey],
+      chaos, custom, dna, enabled: enabledSlots[generatorId], previous: current.values[slotKey],
       previousTopics: Object.values(current.values).flatMap(t=>deriveTopics({t})),
       recent: recentHistoryRef.current[generatorId]?.[slotKey] || []
     });
@@ -489,6 +505,13 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     }));
     const label = gen.slots.find((slot) => slot.key === slotKey)?.label ?? slotKey;
     showToast(nextLocked ? `‘${label}’ 항목 잠금` : `‘${label}’ 잠금 해제`);
+  };
+
+  const toggleSlot = (slotKey) => {
+    setEnabledSlots((prev) => ({
+      ...prev,
+      [generatorId]: { ...prev[generatorId], [slotKey]: prev[generatorId]?.[slotKey] === false }
+    }));
   };
 
   const updateValue = (slotKey, text) => {
@@ -969,6 +992,8 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             dna={dna} onDNAChange={updateDNA} keywordCoverage={keywordCoverage}
             initialAdvanced={setupAdvancedEntry}
             onBegin={beginCreation}
+            enabledSlots={enabledSlots[generatorId]}
+            onToggleSlot={toggleSlot}
           />
         )}
 
@@ -1194,6 +1219,8 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                 return (
                   <ResultCard key={`${gen.id}-${slot.key}`} slotKey={slot.key}
                     label={slot.label} value={value} locked={Boolean(current.locks[slot.key])}
+                    enabled={enabledSlots[generatorId]?.[slot.key] !== false}
+                    onToggleEnabled={() => toggleSlot(slot.key)}
                     spinning={isSpinning} settled={Boolean(settled[slot.key])}
                     onChange={(text) => updateValue(slot.key, text)}
                     onLock={() => toggleLock(slot.key)}

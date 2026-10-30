@@ -317,6 +317,16 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
   animation: cardIn .45s cubic-bezier(.2, .8, .3, 1) both;
 }
+.result-card.is-disabled { opacity: .55; filter: saturate(.55); }
+.result-card.is-disabled .card-value { text-decoration: line-through; text-decoration-color: rgba(255,255,255,.35); }
+.slot-toggle { border: 1px solid var(--line, #3b3150); border-radius: 999px; background: transparent; color: var(--muted, #aaa); font-size: .68rem; padding: 2px 7px; cursor: pointer; }
+.slot-toggle[aria-pressed="true"] { color: var(--accent, #d7b7ff); border-color: currentColor; }
+.slot-settings { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line, #3b3150); }
+.slot-settings-head { margin-bottom: 10px; }
+.slot-toggle-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.slot-setting { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line, #3b3150); border-radius: 999px; background: transparent; color: var(--muted, #aaa); padding: 7px 10px; cursor: pointer; }
+.slot-setting.selected { color: var(--text, #fff); border-color: var(--accent, #d7b7ff); }
+.slot-setting small { opacity: .7; }
 
 .result-card::before {
   content: "";
