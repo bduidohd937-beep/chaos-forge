@@ -33,7 +33,14 @@ export default function SetupScreen({
   // Keep the legacy combined picker available for saved-work compatibility;
   // the generator's own list is shown first and the remaining vocabulary is
   // retained as an explicitly separate "세계관·테마" group below.
-  const genreOptions = ALL_GENRES;
+  // Keep the primary genre scoped to the active generator family. The shared
+  // vocabulary stays visible as disabled compatibility options so saved
+  // hybrid work remains understandable without allowing an invalid main key.
+  const primaryKeys = new Set((generator?.genreList || []).map(item => item.k));
+  const genreOptions = [
+    ...(generator?.genreList || []),
+    ...ALL_GENRES.filter(item => !primaryKeys.has(item.k))
+  ];
   const filteredSubgenres = ALL_GENRES.filter((item) => {
     if (item.k === mainGenre) return false;
     if (needle) return item.n.toLocaleLowerCase().includes(needle);
@@ -100,9 +107,9 @@ export default function SetupScreen({
           </div>
           <div className="setup-primary">
             <label htmlFor="genreSelect">메인 장르 <span className="required-mark">필수 · 1개</span></label>
-            <select className="input" id="genreSelect" value={mainGenre}
+            <select className="input" id="genreSelect" value={primaryKeys.has(mainGenre) ? mainGenre : generator?.genreList?.[0]?.k}
               onChange={event => onMainChange(event.target.value)}>
-              {genreOptions.map(item => <option key={item.k} value={item.k}>{item.n}</option>)}
+              {genreOptions.map(item => <option key={item.k} value={item.k} disabled={!primaryKeys.has(item.k)}>{item.n}{!primaryKeys.has(item.k) ? ' · 호환 테마' : ''}</option>)}
             </select>
           </div>
           <div className="quick-sub-summary">
@@ -210,7 +217,7 @@ export default function SetupScreen({
       <section className="quick-setup-launch" aria-label="현재 선택 및 생성 시작">
         <div className="quick-setup-review">
           <p className="v2-kicker">READY TO CREATE</p>
-          <strong>{genLabel} · {genreLabel(mainGenre)}{subgenres.length ? ` + ${subgenres.map(genreLabel).join(' + ')}` : ''}</strong>
+          <strong>{genLabel} · {genreLabel(primaryKeys.has(mainGenre) ? mainGenre : generator?.genreList?.[0]?.k)}{subgenres.length ? ` + ${subgenres.map(genreLabel).join(' + ')}` : ''}</strong>
           <span>{modeLabel} · {detailName(dna.detail)} 표현{mode === 'hybrid' ? ` · 혼돈 ${chaos}/5` : ''}{bans ? ` · 밴 ${bans}개` : ''}</span>
           <small>기존 결과는 유지되고 새 추첨부터 현재 설정이 적용돼요.</small>
         </div>

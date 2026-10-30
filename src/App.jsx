@@ -217,6 +217,13 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const toastRef = useRef(null);
 
   const gen = GENERATOR_MAP[generatorId];
+  // Older drafts could contain a cross-family main genre. Keep the engine's
+  // compatibility vocabulary intact, but repair the active UI selection.
+  useEffect(() => {
+    if (gen && !gen.genreList.some((item) => item.k === genre)) {
+      setGenre(gen.genreList[0]?.k || genre);
+    }
+  }, [generatorId]);
   const current = results[generatorId] ?? { values: {}, locks: {} };
   const filteredIdeas = useMemo(() => Storage.searchIdeas(search), [ideas, search]);
   const preview = useMemo(

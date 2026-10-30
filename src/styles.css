@@ -595,7 +595,7 @@ input[type="range"]::-moz-range-thumb {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 26px;
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
   transform: translate(-50%, 20px);
   background: var(--surface-2);
   border: 1px solid var(--purple);
@@ -610,6 +610,38 @@ input[type="range"]::-moz-range-thumb {
   z-index: 90;
   max-width: min(90vw, 460px);
   text-align: center;
+}
+
+/* V2.13 shared interaction tokens and safe overlay spacing. */
+:root {
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --focus-ring: 0 0 0 3px rgba(34, 211, 238, .34);
+  --surface-raised: rgba(26, 26, 53, .86);
+  --line-strong: #4d5b78;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [contenteditable]:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+.v2-screen { padding-bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 48px)); }
+.v2-panel, .result-card, .forge-editor, .library-card {
+  border-color: var(--line-strong);
+}
+.slot-toggle, .card-lock-state, .icon-btn, .reel-indicator {
+  min-height: 30px;
+}
+.slot-toggle { min-width: 48px; }
+@media (max-width: 620px) {
+  .v2-screen { padding-bottom: max(64px, calc(env(safe-area-inset-bottom, 0px) + 64px)); }
+  .toast { max-width: calc(100vw - 28px); border-radius: 14px; }
 }
 
 .toast.is-show { opacity: 1; transform: translate(-50%, 0); }
