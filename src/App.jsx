@@ -824,7 +824,8 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               </button>
             </div>
 
-            <div className="chaos-formula" aria-label="현재 장르 설정">
+            <div className="chaos-context-strip" aria-label="현재 추첨 설정">
+              <div className="chaos-formula" aria-label="현재 장르 설정">
               {selectedGenreNames.map((name, i) => (
                 <span key={i} className={`chaos-genre-pill${i === 0 ? ' main' : ''}`}>
                   {i === 0 ? '♛ ' : '+ '}{name}
@@ -837,22 +838,6 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <strong>{dna.detail==='brief'?'간결':dna.detail==='detailed'?'구체적':'기본'} 표현 · 독창성 {dna.novelty}/4</strong>
               <span>⛔ 차단 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
               <button type="button" className="btn btn-outline" onClick={()=>{ setSetupAdvancedEntry(true); setWorkspacePage('setup'); }}>취향·밴 편집</button>
-            </div>
-
-            <div className="mutation-deck" aria-label="CHAOS FORGE 변이 방식">
-              <div>
-                <strong>✦ CREATIVE DNA · 변이 방식</strong>
-                <p>SPARK 새 발상 / ECHO 핵심 한 조각 계승 / RIFT 과감한 변형</p>
-              </div>
-              <div className="mutation-controls" role="group" aria-label="변이 모드 선택">
-                {[
-                  ['spark','SPARK'],
-                  ['echo','ECHO'],
-                  ['rift','RIFT']
-                ].map(([id,label])=>(
-                  <button type="button" key={id} className={`mutation-btn${dna.mutation===id?' selected':''}`}
-                    aria-pressed={dna.mutation===id} onClick={()=>updateDNA({...dna,mutation:id})}>{label}</button>
-                ))}
               </div>
             </div>
             {mutationMessage && <p className="mutation-result" role="status">{mutationMessage}</p>}
@@ -873,6 +858,21 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                 </div>
               </div>
               <div className="chaos-deck-options">
+                <div className="mutation-controls-wrap">
+                  <span className="chaos-control-label">변이 방식</span>
+                  <div className="mutation-controls" role="group" aria-label="변이 모드 선택">
+                    {[
+                      ['spark','SPARK','새 발상'],
+                      ['echo','ECHO','한 가지 계승'],
+                      ['rift','RIFT','파격 변형']
+                    ].map(([id,label,hint])=>(
+                      <button type="button" key={id}
+                        className={`mutation-btn${dna.mutation===id?' selected':''}`}
+                        aria-pressed={dna.mutation===id} title={hint}
+                        onClick={()=>updateDNA({...dna,mutation:id})}>{label}</button>
+                    ))}
+                  </div>
+                </div>
                 <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
                   <span className="reel-presets-label">추첨 연출</span>
                   {[
