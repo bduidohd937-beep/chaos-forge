@@ -18,8 +18,11 @@ import { DATA_STORY } from './data/story.js';
 import { DATA_GAME } from './data/game.js';
 import { DATA_CHARACTER } from './data/character.js';
 import { DATA_HERO } from './data/hero.js';
+import { ALPHA3_KEYWORDS } from './data/alpha3.js';
+import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
+import { planGenreSlots } from './composition.js';
 
-export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES };
+export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES, ALL_GENRES, normalizeGenreSelection, planGenreSlots };
 
 export const MODES = [
   { k: 'genre', n: '장르 맞춤' },
@@ -159,8 +162,32 @@ export function pickKeyword(pool, opts = {}) {
   const genre = opts.genre || '';
   const rng = typeof opts.rng === 'function' ? opts.rng : Math.random;
 
+  if (opts.genres && opts.generatorId) {
+    return pickWithGenreMix(pool, {
+      generatorId: opts.generatorId,
+      genres: opts.genres,
+      mode,
+      chaos: opts.chaos,
+      rng,
+      weightedPick,
+      chaosOutProbability,
+      preferredGenre: opts.preferredGenre,
+      exclude: opts.exclude
+    });
+  }
+
+  // Legacy single-genre calls still support recency exclusions, but never
+  // let exclusions make a previously valid genre run out of matching values.
+  const blocked = new Set((Array.isArray(opts.exclude) ? opts.exclude : [])
+    .filter((text) => typeof text === 'string')
+    .map((text) => text.trim().toLocaleLowerCase()));
+  const withoutRecent = (items) => {
+    const allowed = items.filter((kw) => !blocked.has(kw.t.trim().toLocaleLowerCase()));
+    return allowed.length ? allowed : items;
+  };
+
   if (mode === 'random' || !genre) {
-    return weightedPick(pool, null, rng);
+    return weightedPick(withoutRecent(pool), null, rng);
   }
 
   const fit = [];
@@ -172,24 +199,24 @@ export function pickKeyword(pool, opts = {}) {
 
   if (mode === 'genre') {
     // 커스텀 키워드처럼 일치 풀이 비면 전체 풀로 폴백
-    if (fit.length === 0) return weightedPick(pool, null, rng);
-    return weightedPick(fit, (kw) => kw.w * (hasGenreTag(kw, genre) ? 1.6 : 0.9), rng);
+    if (fit.length === 0) return weightedPick(withoutRecent(pool), null, rng);
+    return weightedPick(withoutRecent(fit), (kw) => kw.w * (hasGenreTag(kw, genre) ? 1.6 : 0.9), rng);
   }
 
   // hybrid
   const pOut = chaosOutProbability(opts.chaos);
   if (out.length > 0 && rng() < pOut) {
-    return weightedPick(out, null, rng);
+    return weightedPick(withoutRecent(out), null, rng);
   }
-  if (fit.length === 0) return weightedPick(pool, null, rng);
-  return weightedPick(fit, (kw) => kw.w * (hasGenreTag(kw, genre) ? 1.6 : 0.9), rng);
+  if (fit.length === 0) return weightedPick(withoutRecent(pool), null, rng);
+  return weightedPick(withoutRecent(fit), (kw) => kw.w * (hasGenreTag(kw, genre) ? 1.6 : 0.9), rng);
 }
 
 /** 커스텀 키워드를 붙인 실제 풀 */
 export function getPool(generatorId, slotKey, customKeywords = []) {
   const gen = GENERATOR_MAP[generatorId];
   if (!gen) return [];
-  const base = [...(gen.data[slotKey] || [])];
+  const base = [...(gen.data[slotKey] || []), ...(ALPHA3_KEYWORDS[generatorId]?.[slotKey] || [])];
   for (const item of customKeywords) {
     if (item.generator === generatorId && item.slot === slotKey) {
       base.push(K(item.text, item.genres || [], item.genres || [], item.weight || 1));
@@ -217,14 +244,43 @@ export function generateResult(generatorId, opts = {}) {
   if (!gen) return {};
   const locks = opts.locks || {};
   const values = opts.values || {};
+  const recent = opts.recent || {};
   const result = {};
+  const pools = Object.fromEntries(
+    gen.slots.map((slot) => [slot.key, getPool(generatorId, slot.key, opts.custom)])
+  );
+  const assignments = opts.genres
+    ? planGenreSlots({
+      generatorId,
+      genres: opts.genres,
+      mode: opts.mode,
+      chaos: opts.chaos,
+      slots: gen.slots,
+      pools,
+      locks,
+      values
+    })
+    : {};
 
   for (const slot of gen.slots) {
     if (locks[slot.key]) {
       result[slot.key] = typeof values[slot.key] === 'string' ? values[slot.key] : '';
       continue;
     }
-    const kw = pickKeyword(getPool(generatorId, slot.key, opts.custom), opts);
+
+    // Prefer a new result over recent outcomes, but never discard the only
+    // genre-fitting candidate just to avoid a repeat.
+    const exclude = [
+      ...(Array.isArray(recent[slot.key]) ? recent[slot.key].slice(-4) : []),
+      values[slot.key],
+      ...Object.values(result)
+    ];
+    const kw = pickKeyword(pools[slot.key], {
+      ...opts,
+      generatorId,
+      preferredGenre: assignments[slot.key],
+      exclude
+    });
     result[slot.key] = kw ? kw.t : '';
   }
   return result;
@@ -232,6 +288,11 @@ export function generateResult(generatorId, opts = {}) {
 
 /** 항목별 재추첨 */
 export function rerollSlot(generatorId, slotKey, opts = {}) {
-  const kw = pickKeyword(getPool(generatorId, slotKey, opts.custom), opts);
+  const pool = getPool(generatorId, slotKey, opts.custom);
+  const exclude = [
+    ...(Array.isArray(opts.recent) ? opts.recent.slice(-4) : []),
+    opts.previous
+  ];
+  const kw = pickKeyword(pool, { ...opts, generatorId, exclude });
   return kw ? kw.t : '';
 }

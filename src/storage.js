@@ -3,9 +3,15 @@
  * localStorage가 막힌 환경(시크릿 모드, 테스트)에서도 메모리로 동작한다.
  */
 
-const IDEAS_KEY = 'chaosforge.ideas.v1';
-const CUSTOM_KEY = 'chaosforge.custom.v1';
-const DRAFT_KEY = 'chaosforge.draft.v1';
+// 별도 경로의 Alpha 미리보기는 운영 사이트와 같은 도메인이므로
+// 로컬스토리지 키를 분리해야 기존 사용자 데이터가 덮어써지지 않는다.
+const IS_PREVIEW = typeof window !== 'undefined' &&
+  window.location.pathname.includes('/preview/v2/');
+const scope = (name) => IS_PREVIEW ? `chaosforge.reforge-preview.v2.${name}` : `chaosforge.${name}.v1`;
+
+const IDEAS_KEY = scope('ideas');
+const CUSTOM_KEY = scope('custom');
+const DRAFT_KEY = scope('draft');
 
 const memory = new Map();
 
@@ -96,6 +102,10 @@ const Storage = {
       generator: idea.generator || '',
       mode: idea.mode || '',
       genre: idea.genre || '',
+      genres: idea.genres && typeof idea.genres === 'object' ? {
+        main: String(idea.genres.main || idea.genre || ''),
+        subs: Array.isArray(idea.genres.subs) ? idea.genres.subs.slice(0, 3) : []
+      } : { main: String(idea.genre || ''), subs: [] },
       chaos: idea.chaos == null ? null : idea.chaos,
       values: idea.values || {},
       createdAt: index >= 0 ? list[index].createdAt : now,
