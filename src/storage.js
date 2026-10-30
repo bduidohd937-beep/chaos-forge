@@ -1,3 +1,5 @@
+import { buildWorkspaceBackup, inspectWorkspaceBackup } from './workspaceBackup.js';
+
 /* CHAOS FORGE - 로컬 저장소
  * 저장된 아이디어(idea)와 사용자 키워드(custom)를 다룬다.
  * localStorage가 막힌 환경(시크릿 모드, 테스트)에서도 메모리로 동작한다.
@@ -15,6 +17,9 @@ const DRAFT_KEY = scope('draft');
 // Independent, opt-in checkpoints for explicitly starting a new idea.
 // Never overwrite or rotate old archives automatically.
 const ARCHIVES_KEY = scope('draft-archives');
+// Crash-recovery journal for replacing all workspace data together.
+const RESTORE_JOURNAL_KEY = scope('restore-transaction');
+const WORKSPACE_KEYS = [DRAFT_KEY, IDEAS_KEY, CUSTOM_KEY, ARCHIVES_KEY];
 
 const memory = new Map();
 
@@ -68,11 +73,128 @@ function write(key, value) {
   }
 }
 
+/** Read every backed-up collection strictly: corrupted JSON must NEVER become an empty backup. */
+function strictRead(key, fallback) {
+  const store = rawStorage();
+  if (!store) throw new Error('브라우저 저장소에 접근할 수 없습니다. 현재 작업을 복원하거나 전체 백업할 수 없어요.');
+  const raw = store.getItem(key);
+  if (raw === null) return fallback;
+  try { return JSON.parse(raw); }
+  catch { throw new Error('저장된 자료가 손상돼 전체 백업을 중단했습니다.'); }
+}
+
+/** Restore raw, byte-for-byte values from a journal; retain journal if rollback fails. */
+function rollbackRaw(store, previous) {
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous) ||
+      WORKSPACE_KEYS.some(key => !Object.hasOwn(previous, key) ||
+        (previous[key] !== null && typeof previous[key] !== 'string'))) {
+    throw new Error('복구 기록이 올바르지 않아 자동 복구를 진행할 수 없습니다.');
+  }
+  // Clear imported values first so the old snapshot can fit under quota.
+  WORKSPACE_KEYS.forEach(key => store.removeItem(key));
+  WORKSPACE_KEYS.forEach(key => {
+    if (previous[key] !== null) store.setItem(key, previous[key]);
+  });
+  WORKSPACE_KEYS.forEach(key => {
+    if (store.getItem(key) !== previous[key]) throw new Error('이전 작업의 검증에 실패했습니다.');
+  });
+  store.removeItem(RESTORE_JOURNAL_KEY);
+}
+
 function uid() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 }
 
 const Storage = {
+  /**
+   * On a crash halfway through an import, rollback the four independent
+   * collections BEFORE App reads or auto-saves a partially restored draft.
+   * Return: 'clean', 'recovered', or 'failed'.
+   */
+  recoverInterruptedRestore() {
+    const store = rawStorage();
+    if (!store) return 'failed';
+    let record;
+    try {
+      const raw = store.getItem(RESTORE_JOURNAL_KEY);
+      if (!raw) return 'clean';
+      record = JSON.parse(raw);
+      if (!record || record.version !== 1 || !record.previous) return 'failed';
+      rollbackRaw(store, record.previous);
+      return 'recovered';
+    } catch {
+      // Keep the journal for a later recovery; never silently discard it.
+      return 'failed';
+    }
+  },
+
+  /** Capture ALL collections plus the latest in-memory draft, not only the last autosave. */
+  createFullBackup(liveDraft) {
+    if (this.recoverInterruptedRestore() === 'failed') {
+      throw new Error('중단된 복원이 남아 있어 백업을 만들 수 없습니다.');
+    }
+    const draft = { ...liveDraft, version: 1 };
+    return buildWorkspaceBackup({
+      draft,
+      ideas: strictRead(IDEAS_KEY, []),
+      custom: strictRead(CUSTOM_KEY, []),
+      archives: strictRead(ARCHIVES_KEY, [])
+    });
+  },
+
+  inspectFullBackup(input) {
+    return inspectWorkspaceBackup(input);
+  },
+
+  /**
+   * Validate everything before changing data. Record exact raw values in an
+   * on-disk journal, replace 4 collections, verify all writes and commit by
+   * deleting the journal. On any write error, rollback to the old snapshots.
+   */
+  restoreFullBackup(input) {
+    const { backup, summary } = inspectWorkspaceBackup(input);
+    const store = rawStorage();
+    if (!store) throw new Error('브라우저 저장소에 접근할 수 없어 복원할 수 없습니다.');
+    const recovery = this.recoverInterruptedRestore();
+    if (recovery === 'failed') {
+      throw new Error('이전에 중단된 복원을 복구하지 못했습니다. 현재 데이터를 변경하지 않았습니다.');
+    }
+    const previous = Object.fromEntries(WORKSPACE_KEYS.map(key => [key, store.getItem(key)]));
+    const journal = { version: 1, createdAt: Date.now(), previous };
+    // If even the protective journal cannot be saved, do not modify a byte.
+    try {
+      store.setItem(RESTORE_JOURNAL_KEY, JSON.stringify(journal));
+    } catch {
+      throw new Error('복원용 보호 기록을 저장할 공간이 부족합니다. 기존 작업은 변경하지 않았습니다.');
+    }
+    const incoming = [
+      { ...backup.data.draft, version: 1 },
+      backup.data.ideas,
+      backup.data.custom,
+      backup.data.archives
+    ];
+    try {
+      WORKSPACE_KEYS.forEach((key, index) => store.setItem(key, JSON.stringify(incoming[index])));
+      WORKSPACE_KEYS.forEach((key, index) => {
+        if (store.getItem(key) !== JSON.stringify(incoming[index])) {
+          throw new Error('저장한 데이터의 재검증에 실패했습니다.');
+        }
+      });
+      store.removeItem(RESTORE_JOURNAL_KEY);
+      if (store.getItem(RESTORE_JOURNAL_KEY) !== null) {
+        throw new Error('복원 기록을 마무리하지 못했습니다.');
+      }
+      return { draft: backup.data.draft, summary };
+    } catch (error) {
+      try {
+        rollbackRaw(store, previous);
+      } catch {
+        throw new Error('복원 중 오류가 났고 즉시 되돌리기도 실패했습니다. 다시 열어 자동 복구를 시도하세요. 새 작업을 하지 마세요.');
+      }
+      throw new Error('복원 저장 중 오류가 발생해 이전 작업으로 되돌렸습니다. ' + String(error.message || ''));
+    }
+  },
+
   /** 화면의 작업 초안을 자동 저장한다. 기존 아이디어 보관함과 별도로 관리한다. */
   saveDraft(draft) {
     if (!draft || typeof draft !== 'object') return false;
