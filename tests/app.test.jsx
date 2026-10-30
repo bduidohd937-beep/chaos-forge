@@ -470,6 +470,18 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
     expect(document.querySelector('#forgeNotesInput').value).toContain('왕궁');
   });
 
+  it('FORGE 내보내기는 접근 가능한 메뉴 하나로 제공하고 세 가지 동작을 유지한다', () => {
+    setup();
+    go('FORGE');
+    const menu = document.querySelector('.forge-export-menu');
+    expect(menu).not.toBeNull();
+    expect(menu.querySelector('summary').textContent).toBe('내보내기');
+    expect(menu.querySelectorAll('button')).toHaveLength(3);
+    expect(menu.querySelector('button').textContent).toContain('기획서 복사');
+    fireEvent.click(menu.querySelector('summary'));
+    expect(menu.hasAttribute('open')).toBe(true);
+  });
+
   it('기존 V1 장르·잠금 초안을 손실 없이 불러온다', () => {
     Storage.saveDraft({
       generatorId: 'story', genre: '판', mode: 'hybrid', chaos: 3,

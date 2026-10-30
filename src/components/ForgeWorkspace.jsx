@@ -89,12 +89,15 @@ export default function ForgeWorkspace({
           <span className={`forge-save-state${saved ? '' : ' error'}`} role="status">
             {saved ? '● 자동 저장됨' : '⚠ 자동 저장 실패'}
           </span>
-          <div className="forge-export-group" aria-label="파일로 내보내기">
-            <span>파일로 내보내기</span>
-            <button type="button" className="btn btn-outline" onClick={onCopyDocument}>기획서 복사</button>
-            <button type="button" className="btn btn-outline" onClick={() => onExport('md')}>MD 저장</button>
-            <button type="button" className="btn btn-outline" onClick={() => onExport('json')}>JSON 백업</button>
-          </div>
+          <details className="forge-export-menu">
+            <summary className="btn btn-outline">내보내기</summary>
+            <div className="forge-export-group" aria-label="파일로 내보내기">
+              <span>기획서 내보내기</span>
+              <button type="button" className="btn btn-outline" onClick={onCopyDocument}>기획서 복사</button>
+              <button type="button" className="btn btn-outline" onClick={() => onExport('md')}>MD 저장</button>
+              <button type="button" className="btn btn-outline" onClick={() => onExport('json')}>JSON 백업</button>
+            </div>
+          </details>
         </div>
       </div>
 
