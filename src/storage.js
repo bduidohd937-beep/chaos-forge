@@ -3,9 +3,18 @@
  * localStorage가 막힌 환경(시크릿 모드, 테스트)에서도 메모리로 동작한다.
  */
 
-const IDEAS_KEY = 'chaosforge.ideas.v1';
-const CUSTOM_KEY = 'chaosforge.custom.v1';
-const DRAFT_KEY = 'chaosforge.draft.v1';
+// 별도 경로의 Alpha 미리보기는 운영 사이트와 같은 도메인이므로
+// 로컬스토리지 키를 분리해야 기존 사용자 데이터가 덮어써지지 않는다.
+const IS_PREVIEW = typeof window !== 'undefined' &&
+  window.location.pathname.includes('/preview/v2/');
+const scope = (name) => IS_PREVIEW ? `chaosforge.reforge-preview.v2.${name}` : `chaosforge.${name}.v1`;
+
+const IDEAS_KEY = scope('ideas');
+const CUSTOM_KEY = scope('custom');
+const DRAFT_KEY = scope('draft');
+// Independent, opt-in checkpoints for explicitly starting a new idea.
+// Never overwrite or rotate old archives automatically.
+const ARCHIVES_KEY = scope('draft-archives');
 
 const memory = new Map();
 
@@ -78,6 +87,42 @@ const Storage = {
     return draft;
   },
 
+  /**
+   * Save a complete, immutable snapshot before replacing the current idea.
+   * Includes every generator, locks, FORGE documents, genre, DNA and history.
+   * If durable browser storage is unavailable/full, return null; callers
+   * MUST NOT reset the current draft.
+   */
+  archiveDraft(draft, label = '') {
+    if (!draft || typeof draft !== 'object' || !draft.results ||
+        typeof draft.results !== 'object') return null;
+    const archives = this.loadDraftArchives();
+    const record = {
+      id: uid(),
+      savedAt: Date.now(),
+      label: String(label || '이전 작업').trim().slice(0, 80) || '이전 작업',
+      generatorId: String(draft.generatorId || 'story').slice(0, 30),
+      // JSON round-trip prevents subsequent React edits mutating snapshots.
+      draft: JSON.parse(JSON.stringify({ ...draft, version: 1 }))
+    };
+    // No automatic truncation/deletion: failed quota writes are surfaced.
+    return write(ARCHIVES_KEY, [record, ...archives]) ? record : null;
+  },
+
+  loadDraftArchives() {
+    const archives = read(ARCHIVES_KEY, []);
+    return Array.isArray(archives) ? archives.filter(item =>
+      item && typeof item === 'object' && typeof item.id === 'string' &&
+      item.draft?.version === 1 && item.draft?.results &&
+      typeof item.draft.results === 'object'
+    ) : [];
+  },
+
+  getDraftArchive(id) {
+    return this.loadDraftArchives().find(item => item.id === id) || null;
+  },
+
+  /** Saved ideas are independent of full draft archives. */
   /** 저장된 아이디어 전체 (최신순) */
   loadIdeas() {
     const list = read(IDEAS_KEY, []);
@@ -96,6 +141,10 @@ const Storage = {
       generator: idea.generator || '',
       mode: idea.mode || '',
       genre: idea.genre || '',
+      genres: idea.genres && typeof idea.genres === 'object' ? {
+        main: String(idea.genres.main || idea.genre || ''),
+        subs: Array.isArray(idea.genres.subs) ? idea.genres.subs.slice(0, 3) : []
+      } : { main: String(idea.genre || ''), subs: [] },
       chaos: idea.chaos == null ? null : idea.chaos,
       values: idea.values || {},
       createdAt: index >= 0 ? list[index].createdAt : now,

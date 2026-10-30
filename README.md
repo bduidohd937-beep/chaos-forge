@@ -1,3 +1,8 @@
+> 🧪 **PROJECT REFORGE V2.0 Alpha · 별도 개발 브랜치**
+> 현재 이 브랜치는 SETUP / CHAOS / FORGE / LIBRARY 작업 공간, 메인·서브 자유 장르 조합을 구현 중이며 **정식 GitHub Pages 버전에 반영하지 않았습니다.**
+> [V2.0 Alpha 설계·호환성·QA 문서](docs/REFORGE_ALPHA.md)를 먼저 확인하세요.
+> 아래 V1.x 문서는 이전 기능 설명으로서 점진적으로 개편될 예정입니다.
+
 # CHAOS FORGE v1.0
 
 소설·게임·캐릭터·세계관 기획을 위한 **한국어 랜덤 아이디어 생성 웹앱**입니다.
