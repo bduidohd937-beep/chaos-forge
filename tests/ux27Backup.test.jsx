@@ -7,7 +7,11 @@ import {
   buildWorkspaceBackup, inspectWorkspaceBackup
 } from '../src/workspaceBackup.js';
 
-const prefix = 'chaosforge.reforge-preview.v2.';
+// Storage's scope is selected at module load. JSDOM defaults to the root
+// path, whereas real V2 runs under /preview/v2/.
+const key = name => window.location.pathname.includes('/preview/v2/')
+  ? 'chaosforge.reforge-preview.v2.' + name
+  : 'chaosforge.' + name + '.v1';
 const fixture = () => ({
   draft: {
     version: 1, generatorId: 'story', mode: 'hybrid', genre: '판', chaos: 3,
@@ -63,7 +67,7 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     const original=fixture();
     WorkspaceStore.saveDraft(original.draft);
     WorkspaceStore.saveIdea({title:'기존 자료',generator:'story',values:{setting:'기존'}});
-    const before={draft:localStorage.getItem(prefix+'draft'),ideas:localStorage.getItem(prefix+'ideas')};
+    const before={draft:localStorage.getItem(key('draft')),ideas:localStorage.getItem(key('ideas'))};
     const good=buildWorkspaceBackup(original);
     const broken=JSON.parse(JSON.stringify(good));
     broken.data.draft.forgeDocs.story.fields.logline='파일을 수정함';
@@ -76,16 +80,16 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     for (const input of ['{bad json',broken,wrong,different,invalid]) {
       expect(()=>WorkspaceStore.restoreFullBackup(input)).toThrow();
     }
-    expect(localStorage.getItem(prefix+'draft')).toBe(before.draft);
-    expect(localStorage.getItem(prefix+'ideas')).toBe(before.ideas);
-    expect(localStorage.getItem(prefix+'restore-transaction')).toBeNull();
+    expect(localStorage.getItem(key('draft'))).toBe(before.draft);
+    expect(localStorage.getItem(key('ideas'))).toBe(before.ideas);
+    expect(localStorage.getItem(key('restore-transaction'))).toBeNull();
   });
 
   it('strict backup capture refuses corrupted stored collections rather than silently dropping them', () => {
     const original=fixture();
-    localStorage.setItem(prefix+'ideas','{invalid');
+    localStorage.setItem(key('ideas'),'{invalid');
     expect(()=>WorkspaceStore.createFullBackup(original.draft)).toThrow(/손상/);
-    expect(localStorage.getItem(prefix+'ideas')).toBe('{invalid');
+    expect(localStorage.getItem(key('ideas'))).toBe('{invalid');
   });
 
   it('restores all four storage collections and verifies they match the selected backup', () => {
@@ -99,7 +103,7 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     expect(WorkspaceStore.loadIdeas()[0].title).toBe('보관 아이디어');
     expect(WorkspaceStore.loadCustom()[0].text).toBe('내 키워드');
     expect(WorkspaceStore.loadDraftArchives()[0].draft.forgeDocs.story.title).toBe('옛 작품');
-    expect(localStorage.getItem(prefix+'restore-transaction')).toBeNull();
+    expect(localStorage.getItem(key('restore-transaction'))).toBeNull();
   });
 
   it('rolls back the entire workspace if any write fails after the journal is saved', () => {
@@ -108,11 +112,11 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     WorkspaceStore.saveIdea({title:'돌아올 생각',generator:'story',values:{setting:'기존'}});
     WorkspaceStore.addCustom({generator:'story',slot:'setting',text:'기존 키워드'});
     const before=Object.fromEntries(['draft','ideas','custom','draft-archives']
-      .map(k=>[k,localStorage.getItem(prefix+k)]));
+      .map(k=>[k,localStorage.getItem(key(k))]));
     const realSet=window.Storage.prototype.setItem;
     let failed=false;
     const spy=vi.spyOn(window.Storage.prototype,'setItem').mockImplementation(function(key,value) {
-      if(!failed && key===prefix+'custom') {
+      if(!failed && key===key('custom')) {
         failed=true;
         throw new Error('QuotaExceededError');
       }
@@ -121,31 +125,31 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     expect(()=>WorkspaceStore.restoreFullBackup(buildWorkspaceBackup(seed))).toThrow(/되돌렸습니다/);
     spy.mockRestore();
     expect(failed).toBe(true);
-    for (const [key,raw] of Object.entries(before)) expect(localStorage.getItem(prefix+key)).toBe(raw);
-    expect(localStorage.getItem(prefix+'restore-transaction')).toBeNull();
+    for (const [key,raw] of Object.entries(before)) expect(localStorage.getItem(key(key))).toBe(raw);
+    expect(localStorage.getItem(key('restore-transaction'))).toBeNull();
   });
 
   it('recovers an interrupted restore journal before App loads and autosaves the draft', () => {
     const old=fixture().draft;
     WorkspaceStore.saveDraft(old);
     const previous=Object.fromEntries(['draft','ideas','custom','draft-archives']
-      .map(key=>[prefix+key,localStorage.getItem(prefix+key)]));
-    localStorage.setItem(prefix+'restore-transaction',
+      .map(key=>[key(key),localStorage.getItem(key(key))]));
+    localStorage.setItem(key('restore-transaction'),
       JSON.stringify({version:1,previous,createdAt:Date.now()}));
-    localStorage.setItem(prefix+'draft',JSON.stringify({...old,forgeDocs:{story:{title:'쓰다 만 복원'}}}));
+    localStorage.setItem(key('draft'),JSON.stringify({...old,forgeDocs:{story:{title:'쓰다 만 복원'}}}));
     expect(WorkspaceStore.recoverInterruptedRestore()).toBe('recovered');
     expect(WorkspaceStore.loadDraft().forgeDocs.story.title).toBe('소중한 작품');
-    expect(localStorage.getItem(prefix+'restore-transaction')).toBeNull();
+    expect(localStorage.getItem(key('restore-transaction'))).toBeNull();
     start();
     expect(document.querySelector('#forgeTitleInput').value).toBe('소중한 작품');
   });
 
   it('blocks autosave if a corrupted pending-restore journal cannot be recovered', () => {
-    localStorage.setItem(prefix+'restore-transaction','corrupt');
+    localStorage.setItem(key('restore-transaction'),'corrupt');
     start();
     expect(screen.getByRole('alert').textContent).toContain('자동 저장을 중지');
-    expect(localStorage.getItem(prefix+'draft')).toBeNull();
-    expect(localStorage.getItem(prefix+'restore-transaction')).toBe('corrupt');
+    expect(localStorage.getItem(key('draft'))).toBeNull();
+    expect(localStorage.getItem(key('restore-transaction'))).toBe('corrupt');
   });
 
   it('LIBRARY imports only after preview, explicit replacement consent, and user click', async () => {
