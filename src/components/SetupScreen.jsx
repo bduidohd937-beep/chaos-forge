@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ALL_GENRES, GENERATORS, MODES } from '../engine.js';
 import CreativeDnaPanel from './CreativeDnaPanel.jsx';
+import BanManager from './BanManager.jsx';
 
 const FEATURED_SUBGENRES = new Set([
   '로', '미', '코', '공', 'SF', '무', '일', '스', '액션', 'RPG', '생존'
@@ -207,7 +208,7 @@ export default function SetupScreen({
           <span className="quick-advanced-icon" aria-hidden="true">⚙</span>
           <span className="quick-advanced-label">
             <strong id="advancedSetupHeading">고급 설정</strong>
-            <small>혼돈 · 독창성 · 선호 분위기 · 소재 차단</small>
+            <small>혼돈 · 취향 추천 · 소재 차단 (각각 따로 관리)</small>
           </span>
           <span className="quick-advanced-summary">
             독창성 {dna.novelty}/4 · 밴 {bans}개
@@ -228,7 +229,10 @@ export default function SetupScreen({
               <div className="chaos-scale"><span>정석</span><span>혼합</span><span>붕괴</span></div>
               <p className="dna-hint">혼돈은 서로 다른 장르 요소를 섞는 정도예요. 독창성과는 별개예요.</p>
             </section>
-            <CreativeDnaPanel dna={dna} onChange={onDNAChange} coverage={keywordCoverage} />
+            <div className="ux22-preference-cards">
+              <CreativeDnaPanel dna={dna} onChange={onDNAChange} coverage={keywordCoverage} />
+              <BanManager dna={dna} onChange={onDNAChange} />
+            </div>
           </div>
         )}
       </section>
