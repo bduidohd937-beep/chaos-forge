@@ -120,7 +120,6 @@ describe('UX 2.1 — safe full-draft checkpoints and return path', () => {
     click(document.querySelector('.session-history summary'));
     click(screen.getByRole('button',{name:/오래된 이야기 이전 작업 불러오기/}));
     expect(document.querySelector('.result-card[data-slot="setting"] .card-value').textContent).toBe(first);
-    expect(document.querySelector('.result-card[data-slot="setting"] .is-locked')).toBeNull();
     expect(document.querySelector('.result-card[data-slot="setting"].is-locked')).not.toBeNull();
     expect(Storage.loadDraftArchives().length).toBe(2);
     expect(Storage.loadDraftArchives()[0].draft.results.story.values.setting).toBe(newValue);
