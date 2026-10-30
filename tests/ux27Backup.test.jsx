@@ -133,7 +133,7 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     const old=fixture().draft;
     WorkspaceStore.saveDraft(old);
     const previous=Object.fromEntries(['draft','ideas','custom','draft-archives']
-      .map(key=>[key(key),localStorage.getItem(key(key))]));
+      .map(item=>[storageKey(item),localStorage.getItem(storageKey(item))]));
     localStorage.setItem(storageKey('restore-transaction'),
       JSON.stringify({version:1,previous,createdAt:Date.now()}));
     localStorage.setItem(storageKey('draft'),JSON.stringify({...old,forgeDocs:{story:{title:'쓰다 만 복원'}}}));
