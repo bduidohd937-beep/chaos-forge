@@ -6,6 +6,7 @@
  * 신규 키워드는 통합 장르 키를 직접 부착할 수 있다.
  */
 import { STORY_GENRES, GAME_GENRES } from './data/genres.js';
+import { isRecentKeyword, preferFreshKeywords } from './quality.js';
 
 export const ALL_GENRES = [...STORY_GENRES, ...GAME_GENRES];
 export const ALL_GENRE_KEYS = new Set(ALL_GENRES.map((g) => g.k));
@@ -85,15 +86,8 @@ export function pickWithGenreMix(pool, {
   exclude = []
 }) {
   if (!pool?.length) return null;
-  const recent = new Set((Array.isArray(exclude) ? exclude : [])
-    .filter((text) => typeof text === 'string')
-    .map((text) => text.trim().toLocaleLowerCase()));
-  const isRecent = kw => [kw.t,...Object.values(kw.forms||{})]
-    .some(text=>typeof text==='string'&&recent.has(text.trim().toLocaleLowerCase()));
-  const unseen = (items) => {
-    const fresh = items.filter((kw) => !isRecent(kw));
-    return fresh.length ? fresh : items;
-  };
+  const isRecent = (kw) => isRecentKeyword(kw, exclude);
+  const unseen = (items) => preferFreshKeywords(items, exclude);
   if (mode === 'random') return weightedPick(unseen(pool), null, rng);
 
   const { main, subs } = normalizeGenreSelection(generatorId, genres);
