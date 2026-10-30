@@ -165,7 +165,7 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     chooseText(JSON.stringify(bundle));
     await waitFor(()=>expect(document.querySelector('.full-backup-compare')).not.toBeNull());
     expect(document.querySelector('#confirmFullRestoreBtn').disabled).toBe(true);
-    expect(document.querySelector('.full-backup-compare').textContent).toContain('보관 아이디어'.slice(0,0)); // counts are previewed
+    expect(document.querySelector('.full-backup-counts').textContent).toContain('백업 파일');
     expect(WorkspaceStore.loadDraft().forgeDocs.story.title).toBe('복원 전 제목');
     fireEvent.click(document.querySelector('.full-backup-consent input'));
     expect(document.querySelector('#confirmFullRestoreBtn').disabled).toBe(false);
