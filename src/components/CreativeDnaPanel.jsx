@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { TOPICS, STYLE_BANS, normalizeDNA } from '../creativeDNA.js';
 
-const DETAILS=[
-  ['brief','간결','소재 중심 · 상상의 여지'],
-  ['balanced','기본','설정 한 문장'],
-  ['detailed','구체적','배경·갈등까지']
-];
 const MOODS=[
   ['any','균형'],['bright','따뜻함'],['dark','어두움'],['comic','유쾌함']
 ];
@@ -18,27 +13,15 @@ export default function CreativeDnaPanel({dna,onChange,coverage}) {
   const flip=(key,id)=>change(key,d[key].includes(id)?d[key].filter(x=>x!==id):[...d[key],id]);
   return (
     <section className="v2-panel dna-panel" aria-labelledby="dnaPanelTitle">
-      <div className="setup-block-head">
-        <span className="setup-step">04</span>
+      <div className="setup-block-head dna-advanced-heading">
+        <span className="setup-step" aria-hidden="true">✦</span>
         <div>
-          <p className="v2-kicker">CHAOS FORGE EXCLUSIVE</p>
-          <h3 id="dnaPanelTitle">CREATIVE DNA — 나만의 창작 취향</h3>
-          <p>추첨은 자유롭게, 방향은 내 취향대로. 선택한 규칙은 다음 추첨에 적용돼요.</p>
+          <p className="v2-kicker">CREATIVE DNA · ADVANCED</p>
+          <h3 id="dnaPanelTitle">나만의 세부 창작 취향</h3>
+          <p>기본 설정을 유지하면서 원하는 소재와 스타일을 세밀하게 조절하세요.</p>
         </div>
       </div>
       <div className="dna-controls">
-        <fieldset className="dna-fieldset">
-          <legend>표현의 구체성</legend>
-          <div className="dna-option-row">
-            {DETAILS.map(([id,label,hint])=>(
-              <button type="button" key={id} className={`dna-choice${d.detail===id?' selected':''}`}
-                aria-pressed={d.detail===id} onClick={()=>change('detail',id)}>
-                <strong>{label}</strong><small>{hint}</small>
-              </button>
-            ))}
-          </div>
-          <p className="dna-hint">짧음·상세 버전이 준비된 키워드는 실제 표현이 달라져요. 기존 키워드는 원문이 유지될 수 있어요.</p>
-        </fieldset>
         <div className="dna-two-col">
           <div>
             <label htmlFor="dnaNovelty">독창성 선호 <strong>{d.novelty}/4</strong></label>
