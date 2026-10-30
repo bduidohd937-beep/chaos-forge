@@ -12,6 +12,9 @@ const scope = (name) => IS_PREVIEW ? `chaosforge.reforge-preview.v2.${name}` : `
 const IDEAS_KEY = scope('ideas');
 const CUSTOM_KEY = scope('custom');
 const DRAFT_KEY = scope('draft');
+// Independent, opt-in checkpoints for explicitly starting a new idea.
+// Never overwrite or rotate old archives automatically.
+const ARCHIVES_KEY = scope('draft-archives');
 
 const memory = new Map();
 
@@ -84,6 +87,42 @@ const Storage = {
     return draft;
   },
 
+  /**
+   * Save a complete, immutable snapshot before replacing the current idea.
+   * Includes every generator, locks, FORGE documents, genre, DNA and history.
+   * If durable browser storage is unavailable/full, return null; callers
+   * MUST NOT reset the current draft.
+   */
+  archiveDraft(draft, label = '') {
+    if (!draft || typeof draft !== 'object' || !draft.results ||
+        typeof draft.results !== 'object') return null;
+    const archives = this.loadDraftArchives();
+    const record = {
+      id: uid(),
+      savedAt: Date.now(),
+      label: String(label || '이전 작업').trim().slice(0, 80) || '이전 작업',
+      generatorId: String(draft.generatorId || 'story').slice(0, 30),
+      // JSON round-trip prevents subsequent React edits mutating snapshots.
+      draft: JSON.parse(JSON.stringify({ ...draft, version: 1 }))
+    };
+    // No automatic truncation/deletion: failed quota writes are surfaced.
+    return write(ARCHIVES_KEY, [record, ...archives]) ? record : null;
+  },
+
+  loadDraftArchives() {
+    const archives = read(ARCHIVES_KEY, []);
+    return Array.isArray(archives) ? archives.filter(item =>
+      item && typeof item === 'object' && typeof item.id === 'string' &&
+      item.draft?.version === 1 && item.draft?.results &&
+      typeof item.draft.results === 'object'
+    ) : [];
+  },
+
+  getDraftArchive(id) {
+    return this.loadDraftArchives().find(item => item.id === id) || null;
+  },
+
+  /** Saved ideas are independent of full draft archives. */
   /** 저장된 아이디어 전체 (최신순) */
   loadIdeas() {
     const list = read(IDEAS_KEY, []);
