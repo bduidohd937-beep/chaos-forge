@@ -3204,3 +3204,167 @@ input[type="range"]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .forge-screen .forge-editor { scroll-behavior: auto; }
 }
+
+
+/* ============================================================
+   UX 2.7 — local-first complete backup and guarded restore
+   ============================================================ */
+.full-backup-panel {
+  display: grid;
+  gap: 13px;
+  margin: 0 0 17px;
+  padding: clamp(16px,2.4vw,23px);
+  border: 1px solid rgba(112,189,207,.45);
+  background: linear-gradient(120deg,rgba(18,39,56,.7),rgba(27,27,53,.8));
+}
+.full-backup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 13px 20px;
+}
+.full-backup-header > div { min-width: 0; flex: 1 1 260px; }
+.full-backup-header h3 { color: #eaf7ff; font-size: 19px; margin: 4px 0 7px; }
+.full-backup-header p:not(.v2-kicker) {
+  color: #bfd3e7; line-height: 1.6; font-size: 12.5px; margin: 0;
+}
+.full-backup-header .btn { min-height: 44px; white-space: normal; padding: 10px 15px; font-size: 13px; }
+.full-backup-stats { display: flex; flex-wrap: wrap; gap: 7px 18px; }
+.full-backup-stats > span { font-size: 12px; color: #bcd4e8; }
+.full-backup-stats strong { color: #c5f5e2; font-weight: 850; }
+.full-backup-help {
+  margin: 0;
+  color: #bac8dc;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.full-backup-import {
+  border: 1px solid rgba(187,156,144,.45);
+  border-radius: 10px;
+  background: rgba(29,27,45,.64);
+}
+.full-backup-import > summary {
+  color: #f1d9d0;
+  padding: 13px 15px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.full-backup-import[open] > summary {
+  border-bottom: 1px solid rgba(187,156,144,.36);
+}
+.full-backup-import-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.full-backup-import-body > p {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #d4d9e6;
+  margin: 0;
+}
+.full-backup-import-body > label {
+  color: #e8ecf4;
+  font-weight: 800;
+  font-size: 12px;
+}
+.full-backup-import-body input[type=file] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  color: #e0eafa;
+  background: rgba(8,17,31,.65);
+  border: 1px dashed #64758c;
+  border-radius: 9px;
+  padding: 12px;
+  font-size: 12px;
+}
+.full-backup-filename { overflow-wrap: anywhere; }
+.full-backup-compare {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #a98f75;
+  background: rgba(111,79,48,.14);
+  border-radius: 10px;
+}
+.full-backup-compare > strong { color: #ffe2c4; font-size: 14px; }
+.full-backup-compare > p { font-size: 12px; margin: 0; color: #cdd9e7; }
+.full-backup-counts {
+  display: grid;
+  grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #455167;
+  border: 1px solid #455167;
+  font-size: 12px;
+}
+.full-backup-counts > * {
+  padding: 9px 8px;
+  margin: 0;
+  background: #182238;
+  color: #d8e3f3;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.full-backup-counts > :nth-child(3n+1) { text-align: left; }
+.full-backup-counts > :nth-child(-n+3) {
+  background: #28344a;
+  font-weight: 800;
+  color: #f4f6ff;
+}
+.full-backup-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  color: #f9e2d1;
+  font-size: 12px;
+  line-height: 1.75;
+}
+.full-backup-consent input {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  accent-color: #cbad88;
+  margin-top: 2px;
+}
+.full-backup-restore { justify-self: start; min-height: 42px; padding: 9px 13px; }
+.full-backup-restore:disabled { opacity: .48; cursor: not-allowed; }
+.full-backup-status {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #b4ecea;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.v2-restore-warning,
+.v2-recovery-info {
+  padding: 13px 17px;
+  border: 1px solid #bd8d72;
+  border-radius: 10px;
+  background: rgba(109,64,42,.25);
+  color: #ffe2ce;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.v2-restore-warning p { margin: 5px 0 0; line-height: 1.55; }
+.v2-recovery-info {
+  border-color: #72abb7;
+  background: rgba(36,85,99,.2);
+  color: #b9f4e9;
+}
+@media (max-width: 620px) {
+  .full-backup-header .btn { width: 100%; }
+  .full-backup-stats { display: grid; gap: 5px; }
+  .full-backup-import-body { padding: 12px; }
+  .full-backup-compare { padding: 12px; }
+  .full-backup-restore { width: 100%; }
+  .full-backup-counts { font-size: 11px; }
+  .full-backup-counts > * { padding: 9px 5px; }
+}
