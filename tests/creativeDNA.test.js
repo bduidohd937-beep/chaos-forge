@@ -166,8 +166,10 @@ describe('Alpha 5 engine compatibility and generation controls', () => {
     expect(result.protagonist).toBe('좀비 장군');
     const report=auditDNACoverage('story',normalizeDNA({bannedTopics:['undead']}),
       [],{protagonist:true},{protagonist:'좀비 장군'});
-    // Hand-written locked text is not altered or falsely classified as metadata-verified.
+    // Even an unregistered, hand-written lock is reported by known aliases.
+    // Nothing overwrites the author's text automatically.
     expect(report.empty).toEqual([]);
+    expect(report.blockedLocked).toContain('주인공');
   });
   it('RIFT never escapes bans while still choosing higher-novelty authored options', () => {
     const pool=[ALPHA5_LIBRARY.story.twist[0],ALPHA5_LIBRARY.story.twist[1]];
