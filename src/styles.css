@@ -2185,7 +2185,12 @@ input[type="range"]::-moz-range-thumb {
   .mutation-btn { flex: 1; }
   .chaos-screen .result-card .card-head { flex-wrap: wrap; }
   .chaos-screen .result-card .card-tools { margin-left: auto; }
-  .chaos-screen .result-card .icon-btn { width: 38px; height: 38px; }
+  .chaos-screen .results { gap: 9px; }
+  .chaos-screen .result-card { min-height: 136px; padding: 13px 14px; }
+  .chaos-screen .result-card .card-head { margin-bottom: 10px; }
+  .chaos-screen .result-card .card-tools { gap: 4px; }
+  .chaos-screen .result-card .icon-btn { width: 40px; height: 40px; }
+  .chaos-screen .result-card .card-value { min-height: 54px; line-height: 1.48; }
 }
 
 

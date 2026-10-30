@@ -720,7 +720,8 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       isJson ? JSON.stringify(data, null, 2) : buildForgeMarkdown(data),
       isJson ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
     );
-    showToast(ok ? 'FORGE 기획서를 내보냈습니다' : '파일 저장을 지원하지 않는 브라우저입니다');
+    const label = isJson ? 'JSON 백업' : 'MD 저장';
+    showToast(ok ? `${label}을 완료했습니다` : `${label}에 실패했습니다. 이 브라우저에서는 파일 저장을 지원하지 않습니다`);
     return ok;
   };
 

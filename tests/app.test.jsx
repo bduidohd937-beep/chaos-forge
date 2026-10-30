@@ -482,6 +482,39 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
     expect(menu.hasAttribute('open')).toBe(true);
   });
 
+  it('FORGE 내보내기 동작은 메뉴를 닫고 각 동작의 결과를 안내한다', async () => {
+    setup();
+    go('FORGE');
+    const menu = document.querySelector('.forge-export-menu');
+    const originalClick = HTMLAnchorElement.prototype.click;
+    const originalCreate = URL.createObjectURL;
+    try {
+      URL.createObjectURL = vi.fn(() => 'blob:forge-close-test');
+      URL.revokeObjectURL = vi.fn();
+      HTMLAnchorElement.prototype.click = vi.fn();
+
+      fireEvent.click(menu.querySelector('summary'));
+      fireEvent.click(screen.getByRole('button', { name: 'MD 저장' }));
+      expect(menu.hasAttribute('open')).toBe(false);
+      expect(document.querySelector('#toast').textContent).toContain('MD 저장을 완료');
+
+      fireEvent.click(menu.querySelector('summary'));
+      fireEvent.click(screen.getByRole('button', { name: 'JSON 백업' }));
+      expect(menu.hasAttribute('open')).toBe(false);
+      expect(document.querySelector('#toast').textContent).toContain('JSON 백업을 완료');
+
+      fireEvent.click(menu.querySelector('summary'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '기획서 복사' }));
+      });
+      expect(menu.hasAttribute('open')).toBe(false);
+      expect(document.querySelector('#toast').textContent).toMatch(/기획서 복사 완료|복사에 실패/);
+    } finally {
+      HTMLAnchorElement.prototype.click = originalClick;
+      URL.createObjectURL = originalCreate;
+    }
+  });
+
   it('기존 V1 장르·잠금 초안을 손실 없이 불러온다', () => {
     Storage.saveDraft({
       generatorId: 'story', genre: '판', mode: 'hybrid', chaos: 3,

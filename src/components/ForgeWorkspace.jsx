@@ -28,6 +28,7 @@ export default function ForgeWorkspace({
   const [sectionId, setSectionId] = useState(null);
   const [simpleMode, setSimpleMode] = useState(true);
   const editorRef = useRef(null);
+  const exportMenuRef = useRef(null);
   const template = getForgeTemplate(generator.id);
   const normalized = normalizeForgeDoc(generator.id, doc);
   const coreSection = template.sections[0];
@@ -66,6 +67,18 @@ export default function ForgeWorkspace({
   };
 
   const openExpert = () => openStage(0);
+  const closeExportMenu = () => {
+    if (exportMenuRef.current) exportMenuRef.current.open = false;
+  };
+  const copyAndCloseExportMenu = async () => {
+    await onCopyDocument();
+    closeExportMenu();
+  };
+  const exportAndCloseMenu = (format) => {
+    const result = onExport(format);
+    closeExportMenu();
+    return result;
+  };
 
   return (
     <section className="v2-screen forge-screen" aria-labelledby="forgeTitle">
@@ -89,13 +102,13 @@ export default function ForgeWorkspace({
           <span className={`forge-save-state${saved ? '' : ' error'}`} role="status">
             {saved ? '● 자동 저장됨' : '⚠ 자동 저장 실패'}
           </span>
-          <details className="forge-export-menu">
+          <details className="forge-export-menu" ref={exportMenuRef}>
             <summary className="btn btn-outline">내보내기</summary>
             <div className="forge-export-group" aria-label="파일로 내보내기">
               <span>기획서 내보내기</span>
-              <button type="button" className="btn btn-outline" onClick={onCopyDocument}>기획서 복사</button>
-              <button type="button" className="btn btn-outline" onClick={() => onExport('md')}>MD 저장</button>
-              <button type="button" className="btn btn-outline" onClick={() => onExport('json')}>JSON 백업</button>
+              <button type="button" className="btn btn-outline" onClick={copyAndCloseExportMenu}>기획서 복사</button>
+              <button type="button" className="btn btn-outline" onClick={() => exportAndCloseMenu('md')}>MD 저장</button>
+              <button type="button" className="btn btn-outline" onClick={() => exportAndCloseMenu('json')}>JSON 백업</button>
             </div>
           </details>
         </div>

@@ -171,7 +171,7 @@ describe('Alpha 4 FORGE studio UI', () => {
       expect(visited.length).toBe(2);
       expect(visited[0]).toMatch(/forge-story.*\.md$/);
       expect(visited[1]).toMatch(/forge-story.*\.json$/);
-      expect(document.querySelector('#toast').textContent).toContain('내보냈습니다');
+      expect(document.querySelector('#toast').textContent).toContain('JSON 백업을 완료');
     } finally {
       HTMLAnchorElement.prototype.click = originalClick;
       URL.createObjectURL = originalCreate;
