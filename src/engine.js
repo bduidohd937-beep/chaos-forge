@@ -20,7 +20,7 @@ import { DATA_CHARACTER } from './data/character.js';
 import { DATA_HERO } from './data/hero.js';
 import { ALPHA3_KEYWORDS } from './data/alpha3.js';
 import { ALPHA5_LIBRARY } from './data/alpha5.js';
-import { allowedKeywords, dnaWeight, renderedText, normalizeDNA } from './creativeDNA.js';
+import { allowedKeywords, dnaWeight, renderedText, normalizeDNA, isExactBanned, isBanned } from './creativeDNA.js';
 import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
 import { planGenreSlots } from './composition.js';
 
@@ -328,10 +328,14 @@ export function auditDNACoverage(generatorId, dna, custom = [], locks = {}, valu
     const allowed = allowedKeywords(pool,d);
     available += allowed.length;
     if (!locks[slot.key] && !allowed.length) empty.push(slot.label);
-    if (locks[slot.key] && values[slot.key] &&
-      pool.some(kw => Object.values(kw.forms||{}).includes(values[slot.key]) || kw.t===values[slot.key]) &&
-      !allowed.some(kw => Object.values(kw.forms||{}).includes(values[slot.key]) || kw.t===values[slot.key])) {
-      blockedLocked.push(slot.label);
+    if (locks[slot.key] && typeof values[slot.key] === 'string' && values[slot.key].trim()) {
+      const matched=pool.find(kw => Object.values(kw.forms||{}).includes(values[slot.key]) || kw.t===values[slot.key]);
+      // User-written values may not have a registered keyword record. Alias
+      // matching is best-effort and still reports a visible conflict.
+      const checked=matched || {t:values[slot.key]};
+      if (isExactBanned(checked,d) || (d.banMode==='hard' && isBanned(checked,d))) {
+        blockedLocked.push(slot.label);
+      }
     }
   }
   return { empty, blockedLocked, available };
