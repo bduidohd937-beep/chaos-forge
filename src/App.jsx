@@ -7,16 +7,28 @@ import {
   generateResult,
   rerollSlot,
   getPool,
-  normalizeGenre
+  getEligiblePool,
+  auditDNACoverage,
+  normalizeGenreSelection,
+  ALL_GENRES
 } from './engine.js';
 import Storage from './storage.js';
 import { buildExportData, buildJson, buildMarkdown, buildFilename, downloadFile } from './export.js';
-import ControlsBar from './components/ControlsBar.jsx';
+import SetupScreen from './components/SetupScreen.jsx';
+import CreativeDnaPanel from './components/CreativeDnaPanel.jsx';
+import BanManager from './components/BanManager.jsx';
+import ForgeWorkspace from './components/ForgeWorkspace.jsx';
+import WorkspaceBackupPanel from './components/WorkspaceBackupPanel.jsx';
 import ResultCard from './components/ResultCard.jsx';
 import IdeasPanel from './components/IdeasPanel.jsx';
 import CustomPanel from './components/CustomPanel.jsx';
 import ConceptPreview from './components/ConceptPreview.jsx';
 import { buildConceptPreview } from './synthesis.js';
+import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
+import {
+  normalizeDNA, banExact, toggleLike, deriveTopics,
+  auditKeywordPools, renderedText
+} from './creativeDNA.js';
 
 const CHAOS_HINTS = {
   1: '장르 키워드만 골라 닮은 느낌을 유지합니다.',
@@ -28,6 +40,9 @@ const CHAOS_HINTS = {
 
 const SPIN_STEP = 70;
 const STAGGER = 110;
+// 실사용 속도: 클래식은 약 2.5초, 슬롯은 약 3.3초에 걸쳐 결과 확정.
+// animationMs prop을 주입하는 자동 테스트는 기존 짧은 타이밍을 유지한다.
+const DEFAULT_ANIMATION_MS = 1800;
 const REEL_STYLES = ['classic', 'slot', 'instant'];
 
 // 접근성: 움직임 최소화 설정에서는 슬롯 연출을 생략한다.
@@ -43,15 +58,56 @@ function seedResults(customKeywords) {
   for (const gen of GENERATORS) {
     seeded[gen.id] = {
       values: generateResult(gen.id, {
-        mode: 'hybrid',
+        mode: 'genre',
         genre: gen.genreList[0].k,
+        genres: { main: gen.genreList[0].k, subs: [] },
         chaos: 3,
+        dna: normalizeDNA(),
         custom: customKeywords
       }),
       locks: {}
     };
   }
   return seeded;
+}
+
+/** 최근 4회 기록은 슬롯별로만 보관하며 예전 초안에는 없어도 된다. */
+function restoreRecentHistory(draft) {
+  const source = draft?.recentHistory;
+  const restored = {};
+  for (const gen of GENERATORS) {
+    restored[gen.id] = {};
+    for (const slot of gen.slots) {
+      const items = source?.[gen.id]?.[slot.key];
+      restored[gen.id][slot.key] = Array.isArray(items)
+        ? items.filter((item) => typeof item === 'string').slice(-4).map((item) => item.slice(0, 5000))
+        : [];
+    }
+  }
+  return restored;
+}
+
+function nextRecentHistory(previous, generatorId, previousValues, nextValues, locks, slots) {
+  const old = previous[generatorId] || {};
+  const updated = { ...old };
+  for (const slot of slots) {
+    if (locks?.[slot.key]) continue;
+    const key = slot.key;
+    const values = [...(old[key] || []), previousValues?.[key], nextValues?.[key]]
+      .filter((item) => typeof item === 'string' && item.trim());
+    // A fresh roll repeats the old value as its previous value. Keep the
+    // most recent occurrence only so the four-slot history stays meaningful.
+    const uniqueNewestFirst = [];
+    const seen = new Set();
+    for (const value of values.reverse()) {
+      const normalized = value.trim().toLocaleLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      uniqueNewestFirst.push(value);
+    }
+    updated[key] = uniqueNewestFirst.reverse().slice(-4);
+  }
+  return { ...previous, [generatorId]: updated };
 }
 
 /** 저장된 초안을 현재 생성기 슬롯 구조에 맞춰 안전하게 복원한다. */
@@ -80,20 +136,49 @@ function restoreResults(draft, customKeywords) {
 /**
  * @param {{animationMs?: number}} props animationMs=0 이면 슬롯 연출 없이 즉시 표시 (테스트용)
  */
-export default function App({ animationMs = 620 }) {
+export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
+  // Restore an interrupted multi-key import BEFORE reading any draft.
+  const [backupRecovery] = useState(() => Storage.recoverInterruptedRestore());
   const [draft] = useState(() => Storage.loadDraft());
+  // A first visit displays sample ideas, not a completed generation.
+  // Old drafts without this flag are treated as previously authored work.
+  const [sessionPhase, setSessionPhase] = useState(
+    () => !draft || draft.sessionPhase === 'sample' ? 'sample' : 'restored'
+  );
+  const [confirmNew, setConfirmNew] = useState(false);
+  const [archives, setArchives] = useState(() => Storage.loadDraftArchives());
   const [custom, setCustom] = useState(() => Storage.loadCustom());
   const [results, setResults] = useState(() => restoreResults(draft, Storage.loadCustom()));
+  const recentHistoryRef = useRef(restoreRecentHistory(draft));
   const [generatorId, setGeneratorId] = useState(
     () => (GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story')
   );
   const [mode, setMode] = useState(
-    () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'hybrid')
+    () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'genre')
   );
-  const [genre, setGenre] = useState(() => normalizeGenre(
+  const initialSelection = normalizeGenreSelection(
     GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story',
-    draft?.genre ?? '판'
-  ));
+    draft?.genreSelection || { main: draft?.genre, subs: [] }
+  );
+  const [genre, setGenre] = useState(initialSelection.main);
+  const [subgenres, setSubgenres] = useState(initialSelection.subs);
+  const [setupAdvancedEntry, setSetupAdvancedEntry] = useState(false);
+  const [chaosPreferenceView, setChaosPreferenceView] = useState(null);
+  const [workspacePage, setWorkspacePage] = useState(
+    () => ['setup','chaos','forge','library'].includes(draft?.workspacePage)
+      ? draft.workspacePage : 'chaos'
+  );
+  const [forgeDocs, setForgeDocs] = useState(
+    () => draft?.forgeDocs && typeof draft.forgeDocs === 'object'
+      && !Array.isArray(draft.forgeDocs) ? draft.forgeDocs : {}
+  );
+  const [dna, setDNA] = useState(() => normalizeDNA(draft?.creativeDNA));
+  const [mutationMessage, setMutationMessage] = useState('');
+  const keywordCoverage = useMemo(
+    () => auditKeywordPools(GENERATORS, (gid,key)=>getPool(gid,key,custom))
+      .find(report=>report.generator===generatorId),
+    [generatorId,custom]
+  );
   const [chaos, setChaos] = useState(() => {
     const value = Number(draft?.chaos);
     return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
@@ -111,6 +196,7 @@ export default function App({ animationMs = 620 }) {
   const [toast, setToast] = useState('');
   const [ideas, setIdeas] = useState(() => Storage.loadIdeas());
   const [search, setSearch] = useState('');
+  const [libraryTab, setLibraryTab] = useState('ideas');
   const [title, setTitle] = useState('');
 
   const tickRef = useRef(null);
@@ -129,9 +215,14 @@ export default function App({ animationMs = 620 }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
-    const ok = Storage.saveDraft({ generatorId, mode, genre, chaos, results, reelStyle });
+    // Never overwrite a half-restored draft if durable recovery is unavailable.
+    if (backupRecovery === 'failed') {
+      setDraftSaved(false);
+      return;
+    }
+    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, chaos, results, reelStyle]);
+  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna, sessionPhase, backupRecovery]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -159,54 +250,106 @@ export default function App({ animationMs = 620 }) {
     []
   );
 
+  // SPA 탭 전환 시 이전 화면의 스크롤 위치가 남아서 새 화면 제목이
+  // 고정 헤더 뒤로 가려지는 문제를 방지한다.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [workspacePage]);
+
   /** 전체 생성 (잠긴 항목은 값 유지) */
   const generate = useCallback(
     (overrides = {}, options = {}) => {
       const gid = overrides.generatorId ?? generatorId;
       const nextMode = overrides.mode ?? mode;
-      const nextGenre = normalizeGenre(gid, overrides.genre ?? genre);
+      const nextGenre = normalizeGenreSelection(gid, { main: overrides.genre ?? genre, subs: overrides.subgenres ?? subgenres }).main;
+      const nextSubs = normalizeGenreSelection(gid, { main: nextGenre, subs: overrides.subgenres ?? subgenres }).subs;
       const nextChaos = overrides.chaos ?? chaos;
+      const baseDNA = normalizeDNA(overrides.dna || dna);
+      const mutation = options.mutation || baseDNA.mutation;
+      const drawDNA = mutation === 'rift'
+        ? {...baseDNA, mutation:'rift', novelty:Math.max(3,baseDNA.novelty)}
+        : {...baseDNA, mutation:'spark'};
       const target = GENERATOR_MAP[gid];
-      const snapshot = results[gid] ?? { values: {}, locks: {} };
+      const snapshot = options.fresh
+        ? { values: {}, locks: {} }
+        : (results[gid] ?? { values: {}, locks: {} });
+      const open = target.slots.filter((slot)=>!snapshot.locks[slot.key]);
       if (target.slots.every((slot) => snapshot.locks[slot.key])) {
         showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
         return;
       }
-
+      // Signature mutation: ECHO temporarily preserves one meaningful card
+      // without changing any of the user's persistent lock switches.
+      const echoPreferences = {
+        story:['protagonist','setting','conflict'],
+        game:['mechanic','gameplay','special'],
+        character:['desire','past','personality'],
+        hero:['class','active','weapon']
+      };
+      const preserved = mutation === 'echo' && open.length > 1
+        ? (echoPreferences[gid] || []).map(key=>open.find(slot=>slot.key===key && snapshot.values[key])).find(Boolean) ||
+          open.find(slot=>snapshot.values[slot.key])
+        : null;
+      const drawLocks = preserved
+        ? {...snapshot.locks,[preserved.key]:true}
+        : snapshot.locks;
+      const shortage = auditDNACoverage(gid,drawDNA,custom,drawLocks,snapshot.values);
+      if (shortage.empty.length) {
+        showToast('BAN 설정으로 후보가 없는 항목: '+shortage.empty.slice(0,3).join(' · ')+'. 설정에서 밴을 줄여 주세요.');
+        return;
+      }
+      if (shortage.blockedLocked.length) {
+        setMutationMessage('잠긴 카드에 차단된 소재가 있어요: '+shortage.blockedLocked.join(' · '));
+      } else {
+        setMutationMessage(preserved
+          ? `ECHO · ${preserved.label}을 한 번 계승하고 나머지를 변형했어요.`
+          : mutation==='rift'?'RIFT · 파격적인 차이를 우선해 추첨했어요.':'');
+      }
       const finalValues = generateResult(gid, {
         mode: nextMode,
         genre: nextGenre,
+        genres: { main: nextGenre, subs: nextSubs },
         chaos: nextChaos,
         custom,
-        locks: snapshot.locks,
-        values: snapshot.values
+        dna: drawDNA,
+        locks: drawLocks,
+        values: snapshot.values,
+        recent: options.fresh ? {} : (recentHistoryRef.current[gid] || {}),
+        previousTopics: Object.values(snapshot.values).flatMap(text=>deriveTopics({t:text}))
       });
+      recentHistoryRef.current = nextRecentHistory(
+        recentHistoryRef.current, gid, snapshot.values, finalValues, drawLocks, target.slots
+      );
 
       // 연출과 무관하게 데이터는 즉시 확정 (연출 중 저장/복사 대비)
       setResults((prev) => ({ ...prev, [gid]: { values: finalValues, locks: snapshot.locks } }));
+      setSessionPhase('active');
       clearAnimations();
 
       const unlocked = target.slots
-        .filter((slot) => !snapshot.locks[slot.key])
+        .filter((slot) => !drawLocks[slot.key])
         .map((slot) => slot.key);
 
       const isSlot = reelStyle === 'slot' || options.overdrive === true;
-      const animated = reelStyle !== 'instant' && animationMs > 0 &&
-        motionAllowed() && unlocked.length > 0;
+      // OS의 움직임 최소화 설정은 첫 기본값만 '즉시'로 정한다.
+      // 사용자가 직접 클래식/슬롯을 선택했다면 명시적인 재생 의사로 존중한다.
+      const animated = reelStyle !== 'instant' && animationMs > 0 && unlocked.length > 0;
       setActiveSpinStyle(isSlot ? 'slot' : 'classic');
       const completion = `${target.title} 생성 완료 · ${modeName(nextMode)}` +
         (nextMode === 'hybrid' ? ` (혼돈 ${nextChaos})` : '');
 
       if (animated) {
         const pools = {};
-        for (const key of unlocked) pools[key] = getPool(gid, key, custom);
+        for (const key of unlocked) pools[key] = getEligiblePool(gid,key,custom,drawDNA);
 
         // 정답을 0.07초 먼저 보여 주지 않고 이전 결과부터 슬롯을 돌린다.
         setSpinText({ ...snapshot.values });
         setSpinning(Object.fromEntries(unlocked.map((key) => [key, true])));
 
-        const baseMs = isSlot ? Math.max(760, animationMs) : animationMs;
-        const staggerMs = isSlot ? 160 : STAGGER;
+        const baseMs = isSlot ? Math.max(760, Math.round(animationMs * 1.15)) : animationMs;
+        const staggerMs = isSlot ? Math.max(160, Math.round(animationMs * 0.1)) : STAGGER;
         const tickMs = isSlot ? 52 : SPIN_STEP;
         const start = Date.now();
         const finished = new Set();
@@ -225,7 +368,7 @@ export default function App({ animationMs = 620 }) {
               // 슬롯 연출: 처음엔 빠르게, 끝날수록 느리게.
               if (isSlot && remaining < 230 && frame % 3 !== 0) return;
               if (isSlot && remaining >= 230 && remaining < 430 && frame % 2 !== 0) return;
-              next[key] = pool[Math.floor(Math.random() * pool.length)].t;
+              next[key] = renderedText(pool[Math.floor(Math.random() * pool.length)],drawDNA);
             });
             return next;
           });
@@ -258,15 +401,34 @@ export default function App({ animationMs = 620 }) {
         showToast(completion);
       }
     },
-    [generatorId, mode, genre, chaos, results, custom, reelStyle, animationMs, clearAnimations, showToast]
+    [generatorId, mode, genre, subgenres, chaos, results, custom, dna, reelStyle, animationMs, clearAnimations, showToast]
   );
 
   const reroll = (slotKey) => {
+    setSessionPhase('active');
     if (current.locks[slotKey]) {
       showToast('잠긴 항목은 재추첨되지 않습니다');
       return;
     }
-    const text = rerollSlot(generatorId, slotKey, { mode, genre, chaos, custom });
+    const available = auditDNACoverage(generatorId,dna,custom,current.locks,current.values);
+    if (available.empty.length && available.empty.includes(gen.slots.find(s=>s.key===slotKey)?.label)) {
+      showToast('차단 규칙 때문에 이 슬롯에 선택 가능한 키워드가 없어요.');
+      return;
+    }
+    const text = rerollSlot(generatorId, slotKey, {
+      mode, genre, genres: { main: genre, subs: subgenres },
+      chaos, custom, dna, previous: current.values[slotKey],
+      previousTopics: Object.values(current.values).flatMap(t=>deriveTopics({t})),
+      recent: recentHistoryRef.current[generatorId]?.[slotKey] || []
+    });
+    recentHistoryRef.current = nextRecentHistory(
+      recentHistoryRef.current,
+      generatorId,
+      current.values,
+      { ...current.values, [slotKey]: text },
+      Object.fromEntries(gen.slots.filter((slot) => slot.key !== slotKey).map((slot) => [slot.key, true])),
+      gen.slots
+    );
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
@@ -278,9 +440,9 @@ export default function App({ animationMs = 620 }) {
     clearAnimations();
     const isSlot = reelStyle === 'slot';
     setActiveSpinStyle(isSlot ? 'slot' : 'classic');
-    if (animationMs <= 0 || reelStyle === 'instant' || !motionAllowed()) return;
+    if (animationMs <= 0 || reelStyle === 'instant') return;
 
-    const pool = getPool(generatorId, slotKey, custom);
+    const pool = allowedKeywords(getPool(generatorId, slotKey, custom),dna);
     const duration = isSlot ? Math.max(520, animationMs * 0.8) : Math.max(260, animationMs * 0.6);
     const cadence = isSlot ? 52 : SPIN_STEP;
     const start = Date.now();
@@ -295,7 +457,7 @@ export default function App({ animationMs = 620 }) {
       if (isSlot && remaining >= 180 && remaining < 300 && frame % 2 !== 0) return;
       setSpinText((prev) => ({
         ...prev,
-        [slotKey]: pool.length ? pool[Math.floor(Math.random() * pool.length)].t : text
+        [slotKey]: pool.length ? renderedText(pool[Math.floor(Math.random() * pool.length)],dna) : text
       }));
     }, cadence);
 
@@ -317,6 +479,7 @@ export default function App({ animationMs = 620 }) {
 
   const toggleLock = (slotKey) => {
     const nextLocked = !current.locks[slotKey];
+    setSessionPhase('active');
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
@@ -329,6 +492,7 @@ export default function App({ animationMs = 620 }) {
   };
 
   const updateValue = (slotKey, text) => {
+    setSessionPhase('active');
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
@@ -339,6 +503,7 @@ export default function App({ animationMs = 620 }) {
   };
 
   const unlockAll = () => {
+    setSessionPhase('active');
     setResults((prev) => ({
       ...prev,
       [generatorId]: { values: prev[generatorId].values, locks: {} }
@@ -352,21 +517,199 @@ export default function App({ animationMs = 620 }) {
     clearAnimations();
     setSpinText({});
     setGeneratorId(id);
-    setGenre((prev) => normalizeGenre(id, prev));
+    setGenre((prev) => normalizeGenreSelection(id, { main: prev, subs: subgenres }).main);
   };
 
   const changeGenre = (value) => {
     setGenre(value);
-    generate({ genre: value });
+    setSubgenres((prev) => prev.filter((key) => key !== value));
+  };
+  const toggleSubgenre = (value) => {
+    if (value === genre) return;
+    setSubgenres((prev) => prev.includes(value)
+      ? prev.filter((key) => key !== value)
+      : prev.length < 3 ? [...prev, value] : prev);
+  };
+  const changeMode = (value) => setMode(value);
+  const updateDNA = (next) => setDNA(normalizeDNA(next));
+  const quickBan = (value) => {
+    const text=String(value||'').trim();
+    if (!text) return;
+    const banned=dna.bannedExact.some(v=>v.toLocaleLowerCase()===text.toLocaleLowerCase());
+    setDNA(prev=>banned
+      ? {...prev,bannedExact:prev.bannedExact.filter(v=>v.toLocaleLowerCase()!==text.toLocaleLowerCase())}
+      : banExact(prev,text));
+    showToast(banned?'문구 차단을 해제했습니다':'문구를 밴 목록에 추가했습니다 · 다음 추첨에 적용돼요');
+  };
+  const quickLike = (value) => {
+    if(!String(value||'').trim())return;
+    setDNA(prev=>toggleLike(prev,value));
+    showToast('취향 가중치를 갱신했습니다');
+  };
+  const beginCreation = () => {
+    setWorkspacePage('chaos');
+    generate();
   };
 
-  const changeMode = (value) => {
-    setMode(value);
-    generate({ mode: value });
+  /**
+   * All explicit 'new idea' operations preserve a full draft snapshot
+   * BEFORE clearing any current generator output or FORGE writing.
+   * Separate saved ideas, custom keywords and other generators survive.
+   */
+  const snapshotDraft = () => ({
+    generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres },
+    chaos, results, reelStyle, workspacePage, forgeDocs,
+    creativeDNA: dna, recentHistory: recentHistoryRef.current,
+    sessionPhase: 'active'
+  });
+  const downloadFullBackup = () => {
+    // Capture the LIVE draft, not a possibly stale last-written autosave.
+    const backup = Storage.createFullBackup({ ...snapshotDraft(), sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
+    return downloadFile(buildFilename('v2-workspace-backup', 'json'),
+      JSON.stringify(backup, null, 2), 'application/json;charset=utf-8');
   };
 
-  const commitChaos = () => {
-    if (mode === 'hybrid') generate({ chaos });
+  const restoreFullBackup = (bundle) => {
+    if (backupRecovery === 'failed') {
+      throw new Error('이전에 중단된 복원이 남아 있어 자동 저장을 보호 중입니다.');
+    }
+    const { draft: prior } = Storage.restoreFullBackup(bundle);
+    const restoredCustom = Storage.loadCustom();
+    const gid = GENERATOR_MAP[prior.generatorId] ? prior.generatorId : 'story';
+    const selection = normalizeGenreSelection(gid, prior.genreSelection || { main: prior.genre, subs: [] });
+    clearAnimations();
+    setSpinText({});
+    setConfirmNew(false);
+    setMutationMessage('');
+    setTitle('');
+    setSearch('');
+    setLibraryTab('ideas');
+    recentHistoryRef.current = restoreRecentHistory(prior);
+    setCustom(restoredCustom);
+    setResults(restoreResults(prior, restoredCustom));
+    setGeneratorId(gid);
+    setMode(MODES.some(m => m.k === prior.mode) ? prior.mode : 'hybrid');
+    setGenre(selection.main);
+    setSubgenres(selection.subs);
+    setDNA(normalizeDNA(prior.creativeDNA));
+    setForgeDocs(prior.forgeDocs && typeof prior.forgeDocs === 'object' && !Array.isArray(prior.forgeDocs) ? prior.forgeDocs : {});
+    const previousChaos = Number(prior.chaos);
+    setChaos(Number.isInteger(previousChaos) && previousChaos >= 1 && previousChaos <= 5 ? previousChaos : 3);
+    setReelStyle(REEL_STYLES.includes(prior.reelStyle) ? prior.reelStyle : 'classic');
+    setSessionPhase(prior.sessionPhase === 'sample' ? 'sample' : 'active');
+    setWorkspacePage(['setup','chaos','forge','library'].includes(prior.workspacePage) ? prior.workspacePage : 'library');
+    setIdeas(Storage.loadIdeas());
+    setArchives(Storage.loadDraftArchives());
+    showToast('전체 백업 복원이 완료됐습니다. 기획서와 이전 작업도 복원했어요.');
+    return true;
+  };
+
+  const startFresh = () => {
+    const shortage = auditDNACoverage(generatorId, dna, custom, {}, {}).empty;
+    if (shortage.length) {
+      showToast('BAN 설정으로 생성할 수 없는 항목: ' + shortage.slice(0, 2).join(' · '));
+      return;
+    }
+    if (sessionPhase !== 'sample') {
+      const currentTitle = String(forgeDocs[generatorId]?.title || '').trim();
+      const saved = Storage.archiveDraft(snapshotDraft(),
+        currentTitle || gen.tab + ' · ' + (current.values[gen.slots[0].key] || '이전 아이디어').slice(0, 48));
+      if (!saved) {
+        showToast('이전 작업을 안전하게 보관하지 못했어요. 새 아이디어를 시작하지 않았습니다.');
+        return;
+      }
+      setArchives(Storage.loadDraftArchives());
+    }
+    clearAnimations();
+    setConfirmNew(false);
+    setTitle('');
+    setMutationMessage('');
+    // Only the current generator's FORGE document is cleared. It is kept in
+    // the archived checkpoint, while docs for other generators remain.
+    setForgeDocs(prev => {
+      const next = { ...prev };
+      delete next[generatorId];
+      return next;
+    });
+    recentHistoryRef.current = {
+      ...recentHistoryRef.current,
+      [generatorId]: Object.fromEntries(gen.slots.map(slot => [slot.key, []]))
+    };
+    setWorkspacePage('chaos');
+    generate({}, { fresh: true });
+  };
+  const restoreArchive = (id) => {
+    const target = Storage.getDraftArchive(id);
+    if (!target) {
+      showToast('저장된 작업 기록을 찾을 수 없어요.');
+      return;
+    }
+    if (sessionPhase !== 'sample') {
+      const saved = Storage.archiveDraft(snapshotDraft(), '돌아가기 전 현재 작업');
+      if (!saved) {
+        showToast('현재 작업을 보관하지 못해 이전 작업으로 전환하지 않았어요.');
+        return;
+      }
+    }
+    const prior = target.draft;
+    const gid = GENERATOR_MAP[prior.generatorId] ? prior.generatorId : 'story';
+    const selection = normalizeGenreSelection(gid, prior.genreSelection || {main:prior.genre,subs:[]});
+    clearAnimations();
+    recentHistoryRef.current = restoreRecentHistory(prior);
+    setGeneratorId(gid);
+    setResults(restoreResults(prior, custom));
+    setMode(MODES.some(m=>m.k===prior.mode)?prior.mode:'hybrid');
+    setGenre(selection.main);
+    setSubgenres(selection.subs);
+    const previousChaos = Number(prior.chaos);
+    setChaos(Number.isInteger(previousChaos) && previousChaos >= 1 && previousChaos <= 5 ? previousChaos : 3);
+    setDNA(normalizeDNA(prior.creativeDNA));
+    setForgeDocs(prior.forgeDocs && typeof prior.forgeDocs==='object' ? prior.forgeDocs : {});
+    setReelStyle(REEL_STYLES.includes(prior.reelStyle) ? prior.reelStyle : 'classic');
+    setSessionPhase('active');
+    setWorkspacePage('chaos');
+    setMutationMessage('');
+    setConfirmNew(false);
+    setArchives(Storage.loadDraftArchives());
+    showToast('이전 작업을 불러왔습니다. 현재 작업도 기록에 보관되어 있어요.');
+  };
+  const updateForgeDoc = (field, value) => {
+    setSessionPhase('active');
+    setForgeDocs((prev) => ({
+      ...prev,
+      [generatorId]: { ...(prev[generatorId] || {}), [field]: value }
+    }));
+  };
+
+  const updateForgeField = (fieldId, text) => {
+    if (!getForgeFields(generatorId).some((field) => field.id === fieldId)) return;
+    setSessionPhase('active');
+    setForgeDocs((prev) => {
+      const doc = normalizeForgeDoc(generatorId, prev[generatorId]);
+      return {
+        ...prev,
+        [generatorId]: {
+          ...doc,
+          fields: { ...doc.fields, [fieldId]: text.slice(0, 12000) }
+        }
+      };
+    });
+  };
+
+  /** Append an explicitly requested source snippet; never replace written prose. */
+  const importForgeField = (fieldId, snippet) => {
+    if (!getForgeFields(generatorId).some((field) => field.id === fieldId)) return;
+    const input = typeof snippet === 'string' ? snippet.trim() : '';
+    if (!input) return;
+    const doc = normalizeForgeDoc(generatorId, forgeDocs[generatorId]);
+    const previous = doc.fields[fieldId] || '';
+    if (previous.includes(input)) {
+      showToast('이미 이 키워드를 가져왔습니다');
+      return;
+    }
+    const combined = [previous.trimEnd(), input].filter(Boolean).join('\n');
+    updateForgeField(fieldId, combined);
+    showToast('기존 문장을 유지하고 키워드를 추가했습니다');
   };
 
   /** 폭주: 선택한 장르는 유지, 하이브리드 혼돈 5로 잠금 항목을 제외하고 재추첨. */
@@ -375,15 +718,13 @@ export default function App({ animationMs = 620 }) {
       showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
       return;
     }
-    setMode('hybrid');
-    setChaos(5);
     generate({ mode: 'hybrid', chaos: 5 }, { overdrive: true });
   };
 
   const buildText = () => {
     const lines = [
       `◈ CHAOS FORGE · ${gen.tab} (${gen.title})`,
-      `모드: ${modeName(mode)} | 장르: ${GENRE_NAME_MAP[genre] || genre}` +
+      `모드: ${modeName(mode)} | 장르: ${[genre, ...subgenres].map((key) => GENRE_NAME_MAP[key] || key).join(' × ')}` +
         (mode === 'hybrid' ? ` | 혼돈: ${chaos}/5` : ''),
       '----------------------------'
     ];
@@ -421,6 +762,22 @@ export default function App({ animationMs = 620 }) {
   const copy = () => copyText(buildText(), '결과');
   const copyConcept = () => copyText(preview.text, '콘셉트');
 
+  const buildForgeDocument = () =>
+    buildForgeExportData(generatorId, forgeDocs[generatorId], current.values);
+  const copyForgeDocument = () => copyText(buildForgeMarkdown(buildForgeDocument()), '기획서');
+  const exportForgeDocument = (format) => {
+    const data = buildForgeDocument();
+    const isJson = format === 'json';
+    const ok = downloadFile(
+      buildFilename('forge-' + generatorId, isJson ? 'json' : 'md'),
+      isJson ? JSON.stringify(data, null, 2) : buildForgeMarkdown(data),
+      isJson ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+    );
+    const label = isJson ? 'JSON 백업' : 'MD 저장';
+    showToast(ok ? `${label}을 완료했습니다` : `${label}에 실패했습니다. 이 브라우저에서는 파일 저장을 지원하지 않습니다`);
+    return ok;
+  };
+
   /** 결과를 마크다운/JSON 파일로 내려받는다 */
   const exportResult = (format) => {
     const isJson = format === 'json';
@@ -428,6 +785,7 @@ export default function App({ animationMs = 620 }) {
       generatorId,
       mode,
       genre,
+      genres: { main: genre, subs: subgenres },
       chaos,
       values: current.values,
       locks: current.locks
@@ -465,6 +823,7 @@ export default function App({ animationMs = 620 }) {
       generator: gen.id,
       mode,
       genre,
+      genres: { main: genre, subs: subgenres },
       chaos,
       values
     });
@@ -497,15 +856,19 @@ export default function App({ animationMs = 620 }) {
     }
     clearAnimations();
     setSpinText({});
+    setSessionPhase('active');
     setGeneratorId(idea.generator);
     setMode(MODES.some((m) => m.k === idea.mode) ? idea.mode : 'hybrid');
-    setGenre(normalizeGenre(idea.generator, idea.genre));
+    const restored = normalizeGenreSelection(idea.generator, idea.genres || { main: idea.genre, subs: [] });
+    setGenre(restored.main);
+    setSubgenres(restored.subs);
     setChaos(Number(idea.chaos) || 3);
 
     const values = {};
     for (const [key, value] of Object.entries(idea.values || {})) values[key] = String(value);
     setResults((prev) => ({ ...prev, [idea.generator]: { values, locks: {} } }));
 
+    setWorkspacePage('chaos');
     showToast('저장한 아이디어를 불러왔습니다');
     if (typeof window !== 'undefined' && window.scrollTo) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -531,182 +894,402 @@ export default function App({ animationMs = 620 }) {
     showToast('키워드를 삭제했습니다');
   };
 
+  const pages = [
+    { id: 'setup', en: 'SETUP', ko: '설정실' },
+    { id: 'chaos', en: 'CHAOS', ko: '생성실' },
+    { id: 'forge', en: 'FORGE', ko: '창작실' },
+    { id: 'library', en: 'LIBRARY', ko: '보관함' }
+  ];
+  const selectedGenreNames = [genre, ...subgenres].map(
+    (key) => ALL_GENRES.find((item) => item.k === key)?.n || key
+  );
+
   return (
     <>
-      <header className="site-header">
+      <header className="site-header v2-header">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="34" height="34" fill="none">
-              <path
-                d="M16 2l4.6 9.3L30 12.8l-7 6.8 1.7 9.6L16 24.4 7.3 29.2 9 19.6 2 12.8l9.4-1.5L16 2z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
+          <span className="brand-mark" aria-hidden="true">✦</span>
           <div className="brand-text">
             <h1>CHAOS FORGE</h1>
-            <p>장르 적합성 × 혼돈 · 아이디어 생성기 v1.2.1</p>
+            <p>CREATE THE IMPOSSIBLE · PROJECT REFORGE</p>
           </div>
+          <span className="v2-beta">V2.0 ALPHA</span>
         </div>
-
-        <nav className="tabs" id="generatorTabs" role="tablist" aria-label="생성기 선택">
-          {GENERATORS.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className="tab"
-              role="tab"
-              aria-selected={g.id === generatorId}
-              title={`${g.title} — ${g.desc}`}
-              onClick={() => switchGenerator(g.id)}
-            >
-              {g.tab}
+        <nav className="workspace-nav" aria-label="창작 공간 이동">
+          {pages.map((page, index) => (
+            <button type="button" key={page.id}
+              className={`workspace-tab${page.id === workspacePage ? ' selected' : ''}`}
+              aria-current={workspacePage === page.id ? 'page' : undefined}
+              onClick={() => { clearAnimations(); setSetupAdvancedEntry(false); setChaosPreferenceView(null); setWorkspacePage(page.id); }}>
+              <small>{String(index + 1).padStart(2, '0')}</small>
+              <strong>{page.en}</strong>
+              <span>{page.ko}</span>
             </button>
           ))}
         </nav>
       </header>
 
-      <main className="wrap">
-        <div className="workspace-bar" aria-label="작업 상태">
-          <span className="workspace-name">◈ CHAOS MODE <span>발견하고, 고정하고, 다듬기</span></span>
-          <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
-            <span className="reel-presets-label">연출</span>
-            {[
-              ['classic', '클래식'],
-              ['slot', '슬롯'],
-              ['instant', '즉시']
-            ].map(([key, label]) => (
-              <button key={key} type="button" className="reel-preset"
-                aria-pressed={reelStyle === key}
-                onClick={() => {
-                  clearAnimations();
-                  setReelStyle(key);
-                }}
-              >{label}</button>
-            ))}
-          </div>
+      {backupRecovery === 'failed' && (
+        <div className="wrap v2-restore-warning" role="alert">
+          <strong>⚠ 중단된 데이터 복구가 필요해요.</strong>
+          <p>이전에 시작한 복원을 안전하게 되돌리지 못해 자동 저장을 중지했습니다. 이 브라우저의 데이터를 초기화하지 마세요.</p>
+        </div>
+      )}
+      {backupRecovery === 'unavailable' && (
+        <div className="wrap v2-restore-warning" role="alert">
+          <strong>⚠ 브라우저 저장소를 사용할 수 없어요.</strong>
+          <p>작업은 일시적으로 보일 수 있지만 새로고침 후 사라질 수 있습니다. 저장소 권한을 확인해 주세요.</p>
+        </div>
+      )}
+      {backupRecovery === 'recovered' && (
+        <div className="wrap v2-recovery-info" role="status">
+          중단됐던 복원을 감지해 이전 데이터를 복구했습니다.
+        </div>
+      )}
+      <main className="wrap v2-wrap" data-screen={workspacePage}>
+        <div className="v2-statusbar">
+          <span>✦ 현재 작업 · {gen.title} <em>{selectedGenreNames.join(' × ')}</em></span>
           <span className={`autosave-status${draftSaved ? '' : ' is-error'}`} role="status">
-            {draftSaved ? '● 초안 자동 저장됨' : '⚠ 자동 저장 실패 · JSON 백업 권장'}
+            {draftSaved ? '● 이 브라우저에 자동 저장됨' : '⚠ 자동 저장 실패 · JSON 백업 권장'}
           </span>
         </div>
-        <ControlsBar
-          genres={gen.genreList}
-          genre={genre}
-          onGenreChange={changeGenre}
-          mode={mode}
-          onModeChange={changeMode}
-          chaos={chaos}
-          chaosHint={
-            mode === 'hybrid'
-              ? CHAOS_HINTS[chaos]
-              : mode === 'genre'
-                ? '선택한 장르와 어울리는 키워드만 등장합니다.'
-                : '장르 제약 없이 모든 키워드가 동일 확률로 섞입니다.'
-          }
-          onChaosChange={setChaos}
-          onChaosCommit={commitChaos}
-          onGenerate={() => generate()}
-          onOverdrive={overdrive}
-          onUnlockAll={unlockAll}
-        />
 
-        <div className="reel-status" role="status" aria-live="polite">
-          <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
-          {isRolling
-            ? `키워드 조합 중 · ${Object.keys(spinning).length}개 슬롯 회전`
-            : `${gen.title} · ${lockedCount}개 고정 / ${gen.slots.length}개 항목`}
-        </div>
-        <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
-          id="results" aria-live="off" aria-label="생성 결과">
-          {gen.slots.map((slot) => {
-            const isSpinning = Boolean(spinning[slot.key]);
-            const value = isSpinning
-              ? spinText[slot.key] ?? current.values[slot.key] ?? ''
-              : current.values[slot.key] ?? '';
-
-            return (
-              <ResultCard
-                key={`${gen.id}-${slot.key}`}
-                slotKey={slot.key}
-                label={slot.label}
-                value={value}
-                locked={Boolean(current.locks[slot.key])}
-                spinning={isSpinning}
-                settled={Boolean(settled[slot.key])}
-                onChange={(text) => updateValue(slot.key, text)}
-                onLock={() => toggleLock(slot.key)}
-                onReroll={() => reroll(slot.key)}
-              />
-            );
-          })}
-        </section>
-
-        <ConceptPreview
-          preview={preview}
-          isRolling={isRolling}
-          lockedCount={lockedCount}
-          totalCount={gen.slots.length}
-          onCopy={copyConcept}
-        />
-
-        <section className="result-actions">
-          <button type="button" className="btn btn-outline" id="copyBtn" onClick={copy}>
-            결과 복사
-          </button>
-          <div className="export-group">
-            <button
-              type="button"
-              className="btn btn-outline"
-              id="exportMdBtn"
-              onClick={() => exportResult('md')}
-            >
-              MD 저장
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline"
-              id="exportJsonBtn"
-              onClick={() => exportResult('json')}
-            >
-              JSON 저장
-            </button>
-          </div>
-          <input
-            type="text"
-            id="ideaTitle"
-            className="input input-inline"
-            placeholder="저장할 제목 (선택)"
-            maxLength={60}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+        {workspacePage === 'setup' && (
+          <SetupScreen
+            generatorId={generatorId}
+            onGeneratorChange={switchGenerator}
+            mainGenre={genre}
+            subgenres={subgenres}
+            onMainChange={changeGenre}
+            onSubChange={toggleSubgenre}
+            mode={mode}
+            onModeChange={changeMode}
+            chaos={chaos}
+            onChaosChange={setChaos}
+            dna={dna} onDNAChange={updateDNA} keywordCoverage={keywordCoverage}
+            initialAdvanced={setupAdvancedEntry}
+            onBegin={beginCreation}
           />
-          <button type="button" className="btn btn-accent" id="saveBtn" onClick={saveIdea}>
-            아이디어 저장
-          </button>
-        </section>
+        )}
 
-        <div className="panels">
-          <IdeasPanel
-            ideas={filteredIdeas}
-            total={ideas.length}
-            search={search}
-            onSearch={setSearch}
-            onLoad={loadIdea}
-            onDelete={deleteIdea}
-          />
-          <CustomPanel custom={custom} onAdd={addCustom} onDelete={deleteCustom} />
-        </div>
+        {workspacePage === 'chaos' && (
+          <section className="v2-screen chaos-screen" aria-labelledby="chaosTitle">
+            <div className="v2-intro chaos-intro">
+              <p className="v2-kicker">02 / CHAOS — THE RANDOM CHAMBER</p>
+              <h2 id="chaosTitle">가능성을 추첨하세요.</h2>
+              <p>마음에 드는 설정은 잠그고, 나머지는 원하는 만큼 다시 뽑으세요.</p>
+            </div>
+
+            {sessionPhase !== 'active' && (
+              <section className="session-guide" aria-label="아이디어 시작 안내">
+                <div className="session-guide-copy">
+                  <strong>{sessionPhase === 'sample'
+                    ? '✧ 처음 오셨나요? 아래 키워드는 샘플 미리보기예요.'
+                    : '↺ 이전에 작성하던 작업을 자동으로 복원했어요.'}</strong>
+                  <p>{sessionPhase === 'sample'
+                    ? '샘플을 구경하거나, 첫 추첨으로 나만의 아이디어를 시작해 보세요. 처음에는 잠긴 카드가 없어요.'
+                    : '현재 결과·잠금·FORGE 작성 내용이 보존되어 있어요. 그대로 이어서 작업하거나 안전하게 새 아이디어를 만들 수 있어요.'}</p>
+                </div>
+                <div className="session-guide-actions">
+                  {sessionPhase === 'sample' ? (
+                    <>
+                      <button type="button" className="btn btn-primary" id="firstIdeaBtn"
+                        onClick={startFresh}>◈ 첫 아이디어 뽑기</button>
+                      <button type="button" className="btn btn-outline"
+                        onClick={() => setWorkspacePage('setup')}>설정부터 고르기</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn btn-primary" id="resumeIdeaBtn"
+                        onClick={() => setSessionPhase('active')}>↺ 이전 작업 이어하기</button>
+                      <button type="button" className="btn btn-outline"
+                        onClick={() => setConfirmNew(true)}>새 아이디어 시작</button>
+                    </>
+                  )}
+                </div>
+              </section>
+            )}
+
+            <div className="chaos-toolbar">
+              <nav className="tabs" id="generatorTabs" role="tablist" aria-label="생성기 선택">
+                {GENERATORS.map((g) => (
+                  <button type="button" key={g.id} className="tab" role="tab"
+                    aria-selected={g.id === generatorId}
+                    title={`${g.title} — ${g.desc}`}
+                    onClick={() => switchGenerator(g.id)}>
+                    {g.tab}
+                  </button>
+                ))}
+              </nav>
+              <div className="chaos-toolbar-actions">
+                <button type="button" className="v2-edit-setup" onClick={() => { setSetupAdvancedEntry(false); setWorkspacePage('setup'); }}>
+                  설정 편집 ↗
+                </button>
+                <button type="button" className="v2-new-idea" id="newIdeaBtn"
+                  onClick={() => sessionPhase === 'sample' ? startFresh() : setConfirmNew(true)}>
+                  + 새 아이디어
+                </button>
+              </div>
+            </div>
+            {confirmNew && (
+              <div className="new-idea-confirm" role="group" aria-label="새 아이디어 확인">
+                <div>
+                  <strong>새 아이디어를 시작할까요?</strong>
+                  <p>지금 작성한 결과·잠금·FORGE 설정집은 <b>이전 작업 기록에 보관</b>한 뒤, 현재 창작 유형만 새로 시작해요. 다른 유형의 작업은 그대로 유지됩니다.</p>
+                </div>
+                <div className="new-idea-confirm-actions">
+                  <button type="button" className="btn btn-outline" onClick={() => setConfirmNew(false)}>취소</button>
+                  <button type="button" className="btn btn-primary" id="confirmNewIdeaBtn"
+                    onClick={startFresh}>이전 작업 보관하고 새로 만들기</button>
+                </div>
+              </div>
+            )}
+            {archives.length > 0 && (
+              <details className="session-history" aria-label="이전 작업 기록">
+                <summary>↺ 보관된 이전 작업 {archives.length}개 · 다시 불러오기</summary>
+                <div className="session-history-list">
+                  {archives.map(item => (
+                    <div key={item.id} className="session-history-item">
+                      <div>
+                        <strong>{item.label}</strong>
+                        <small>{new Date(item.savedAt).toLocaleString('ko-KR')} · {GENERATOR_MAP[item.generatorId]?.tab || '작업'}</small>
+                      </div>
+                      <button type="button" className="btn btn-outline"
+                        onClick={() => restoreArchive(item.id)}
+                        aria-label={`${item.label} 이전 작업 불러오기`}>불러오기</button>
+                    </div>
+                  ))}
+                </div>
+                <p>기록은 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 복원할 수 없으므로 중요한 작품은 별도 백업해 주세요.</p>
+              </details>
+            )}
+
+            <div className="chaos-context-strip" aria-label="현재 추첨 설정">
+              <div className="chaos-formula" aria-label="현재 장르 설정">
+              {selectedGenreNames.map((name, i) => (
+                <span key={i} className={`chaos-genre-pill${i === 0 ? ' main' : ''}`}>
+                  {i === 0 ? '♛ ' : '+ '}{name}
+                </span>
+              ))}
+              <span className="chaos-meta">· {modeName(mode)}{mode === 'hybrid' ? ` · 혼돈 ${chaos}/5` : ''}</span>
+            </div>
+            <div className="dna-active-summary">
+              <span>CREATIVE DNA</span>
+              <strong>{dna.detail==='brief'?'키워드':dna.detail==='detailed'?'구체설정':'기본문장'} · 독창성 {dna.novelty}/4</strong>
+              <span>⛔ 제외 설정 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
+              <div className="dna-quick-actions" role="group" aria-label="취향과 차단 바로 관리">
+                <button type="button" className="btn btn-outline" id="openPreferencesBtn"
+                  aria-expanded={chaosPreferenceView==='preferences'}
+                  aria-controls="chaosPreferenceEditor"
+                  onClick={()=>setChaosPreferenceView(v=>v==='preferences'?null:'preferences')}>
+                  ✦ 취향 조절
+                </button>
+                <button type="button" className="btn btn-outline" id="openBanManagerBtn"
+                  aria-expanded={chaosPreferenceView==='ban'}
+                  aria-controls="chaosPreferenceEditor"
+                  onClick={()=>setChaosPreferenceView(v=>v==='ban'?null:'ban')}>
+                  ⛔ 차단 관리
+                </button>
+              </div>
+              </div>
+            </div>
+            {chaosPreferenceView && (
+              <section id="chaosPreferenceEditor" className="chaos-preference-editor"
+                aria-label={chaosPreferenceView==='ban'?'차단 관리':'창작 취향 조절'}>
+                <div className="chaos-preference-heading">
+                  <span>{chaosPreferenceView==='ban'
+                    ? '⛔ 피하고 싶은 소재를 선택하세요. 기존 결과는 유지되고 다음 추첨부터 적용돼요.'
+                    : '✦ 좋아하는 스타일을 조절하세요. 차단 설정과는 별개예요.'}</span>
+                  <button type="button" className="btn btn-outline" onClick={()=>setChaosPreferenceView(null)}>
+                    편집 닫기 ×
+                  </button>
+                </div>
+                {chaosPreferenceView==='preferences'
+                  ? <CreativeDnaPanel dna={dna} onChange={updateDNA} />
+                  : <BanManager dna={dna} onChange={updateDNA} initialOpen />}
+              </section>
+            )}
+            {mutationMessage && <p className="mutation-result" role="status">{mutationMessage}</p>}
+            <div className="chaos-control-deck">
+              <div className="chaos-deck-main">
+                <div className="chaos-deck-heading">
+                  <span className="v2-kicker">THE GENERATOR</span>
+                  <strong>마음에 드는 카드는 고정하고, 나머지는 다시 뽑으세요.</strong>
+                  <p>🔒 고정된 카드는 유지 · 🔓 열린 카드는 다음 추첨에서 변경</p>
+                </div>
+                <div className="chaos-primary-actions">
+                  <button type="button" className="btn btn-primary v2-generate" id="generateBtn"
+                    aria-busy={isRolling}
+                    onClick={() => generate()}>{isRolling ? '◈ 추첨 진행 중…' : '◈ 전체 추첨'}</button>
+                  <button type="button" className="btn btn-overdrive" id="overdriveBtn"
+                    title="설정을 바꾸지 않고 이번 추첨에만 혼돈 5 적용"
+                    onClick={overdrive}>⚡ 폭주 추첨</button>
+                </div>
+              </div>
+              <div className="chaos-deck-options">
+                <div className="mutation-controls-wrap">
+                  <span className="chaos-control-label">변이 방식</span>
+                  <div className="mutation-controls" role="group" aria-label="변이 모드 선택">
+                    {[
+                      ['spark','SPARK','새로운 조합','새 소재들을 자유롭게 뽑아요.'],
+                      ['echo','ECHO','하나 유지','현재 설정 하나를 잠깐 보존하고 나머지를 뽑아요.'],
+                      ['rift','RIFT','파격 변형','다른 소재와 낯선 조합을 더 자주 선택해요.']
+                    ].map(([id,label,hint,explanation])=>(
+                      <button type="button" key={id}
+                        className={`mutation-btn${dna.mutation===id?' selected':''}`}
+                        aria-pressed={dna.mutation===id}
+                        title={explanation} onClick={()=>updateDNA({...dna,mutation:id})}>
+                        {label}<small aria-hidden="true"> · {hint}</small>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mutation-explainer">
+                    {dna.mutation==='echo'?'ECHO: 기존 아이디어의 한 조각을 이번 추첨에만 유지해요.'
+                      :dna.mutation==='rift'?'RIFT: 파격적인 소재를 우선하지만 BAN은 그대로 지켜요.'
+                      :'SPARK: 잠금으로 고정한 부분만 남기고 새 아이디어를 뽑아요.'}
+                  </p>
+                </div>
+                <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
+                  <span className="reel-presets-label">추첨 연출</span>
+                  {[
+                    ['slot', '슬롯'],
+                    ['classic', '클래식'],
+                    ['instant', '즉시']
+                  ].map(([key, label]) => (
+                    <button type="button" key={key} className="reel-preset"
+                      aria-pressed={reelStyle === key}
+                      onClick={() => { clearAnimations(); setReelStyle(key); }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="btn btn-ghost chaos-unlock" id="unlockAllBtn"
+                  onClick={unlockAll}>모든 잠금 해제</button>
+              </div>
+            </div>
+
+            <div className="reel-status" role="status" aria-live="polite">
+              <span className={`reel-dot${isRolling ? ' is-active' : ''}`} aria-hidden="true" />
+              {isRolling
+                ? `${activeSpinStyle === 'slot' ? '🎰 슬롯' : '✦ 클래식'} 추첨 진행 중 · ${Object.keys(spinning).length}개 남음 · 순차 확정`
+                : `${lockedCount}개 고정(유지) · ${gen.slots.length - lockedCount}개 열림(재추첨 가능)`}
+            </div>
+            {lockedCount === gen.slots.length && (
+              <div className="all-locked-help" role="status">
+                <span>🔒 모든 카드가 고정되어 있어요. 잠금을 해제해야 다시 뽑을 수 있어요.</span>
+                <button type="button" className="btn btn-outline" onClick={unlockAll}>전체 잠금 해제하기</button>
+              </div>
+            )}
+            <div className="chaos-result-heading">
+              <h3>추첨 결과 <span>{gen.slots.length}개 항목</span></h3>
+              <p>🔒 고정 = 다음 추첨에도 유지 · 🔓 열림 = 변경 가능 · ↻ 카드만 재추첨</p>
+            </div>
+            <section className={`results ${activeSpinStyle === 'slot' ? 'is-slot' : 'is-classic'}`}
+              id="results" aria-live="off" aria-label="생성 결과">
+              {gen.slots.map((slot) => {
+                const isSpinning = Boolean(spinning[slot.key]);
+                const value = isSpinning
+                  ? spinText[slot.key] ?? current.values[slot.key] ?? ''
+                  : current.values[slot.key] ?? '';
+                return (
+                  <ResultCard key={`${gen.id}-${slot.key}`} slotKey={slot.key}
+                    label={slot.label} value={value} locked={Boolean(current.locks[slot.key])}
+                    spinning={isSpinning} settled={Boolean(settled[slot.key])}
+                    onChange={(text) => updateValue(slot.key, text)}
+                    onLock={() => toggleLock(slot.key)}
+                    onReroll={() => reroll(slot.key)}
+                    onBan={() => quickBan(current.values[slot.key])}
+                    onLike={() => quickLike(current.values[slot.key])}
+                    isLiked={dna.likes.includes(current.values[slot.key])}
+                    isBanned={dna.bannedExact.includes(current.values[slot.key])}
+                  />
+                );
+              })}
+            </section>
+
+            <div className="chaos-after-actions">
+              <button type="button" className="btn btn-accent v2-forge-cta"
+                onClick={() => { clearAnimations(); setWorkspacePage('forge'); }}>
+                ✧ 이 아이디어 다듬기 → FORGE
+              </button>
+              <div className="chaos-utility-actions">
+                <button type="button" className="btn btn-outline" id="copyBtn" onClick={copy}>결과 복사</button>
+                <button type="button" className="btn btn-outline" id="exportMdBtn"
+                  onClick={() => exportResult('md')}>MD</button>
+                <button type="button" className="btn btn-outline" id="exportJsonBtn"
+                  onClick={() => exportResult('json')}>JSON</button>
+              </div>
+            </div>
+
+            <details className="v2-save-details">
+              <summary>+ 이 조합을 보관함에 저장</summary>
+              <div className="result-actions">
+                <input id="ideaTitle" type="text" className="input input-inline"
+                  placeholder="아이디어 제목 (선택)" maxLength={60}
+                  value={title} onChange={(e) => setTitle(e.target.value)} />
+                <button type="button" className="btn btn-accent" id="saveBtn"
+                  onClick={saveIdea}>아이디어 저장</button>
+              </div>
+            </details>
+          </section>
+        )}
+
+        {workspacePage === 'forge' && (
+          <ForgeWorkspace key={generatorId}
+            generator={gen} values={current.values} preview={preview}
+            isRolling={isRolling} lockedCount={lockedCount} doc={forgeDocs[generatorId] || {}}
+            onUpdate={updateForgeDoc} onUpdateField={updateForgeField}
+            onImportField={importForgeField}
+            onExport={exportForgeDocument} onCopyDocument={copyForgeDocument}
+            onCopy={copyConcept} saved={draftSaved}
+            onBack={() => setWorkspacePage('chaos')} />
+        )}
+
+        {workspacePage === 'library' && (
+          <section className="v2-screen library-screen" aria-labelledby="libraryTitle">
+            <div className="v2-intro">
+              <p className="v2-kicker">04 / LIBRARY — YOUR CREATIVE ARCHIVE</p>
+              <h2 id="libraryTitle">아이디어를 잃지 마세요.</h2>
+              <p>저장된 아이디어와 직접 추가한 키워드를 별도 탭으로 관리하세요.</p>
+            </div>
+            <WorkspaceBackupPanel
+              currentCounts={{
+                ideas: ideas.length, custom: custom.length, archives: archives.length,
+                forgeDocs: Object.values(forgeDocs).filter(doc => doc && typeof doc === 'object' &&
+                  (String(doc.title || '').trim() || String(doc.notes || '').trim() ||
+                   Object.values(doc.fields || {}).some(value => typeof value === 'string' && value.trim()))).length
+              }}
+              onBackup={downloadFullBackup} onRestore={restoreFullBackup}
+            />
+            <div className="library-switch" role="tablist" aria-label="보관함 카테고리">
+              <button type="button" role="tab" aria-selected={libraryTab === 'ideas'}
+                className={`library-switch-tab${libraryTab === 'ideas' ? ' selected' : ''}`}
+                onClick={() => setLibraryTab('ideas')}>
+                저장된 아이디어 <span>{ideas.length}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={libraryTab === 'custom'}
+                className={`library-switch-tab${libraryTab === 'custom' ? ' selected' : ''}`}
+                onClick={() => setLibraryTab('custom')}>
+                사용자 키워드 <span>{custom.length}</span>
+              </button>
+            </div>
+            <div className="panels">
+              {libraryTab === 'ideas' ? (
+                <IdeasPanel ideas={filteredIdeas} total={ideas.length} search={search}
+                  onSearch={setSearch} onLoad={loadIdea} onDelete={deleteIdea} />
+              ) : (
+                <CustomPanel custom={custom} onAdd={addCustom} onDelete={deleteCustom} />
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
       <footer className="site-footer">
-        <p>CHAOS FORGE v1.2.1 · 자동 저장되는 초안과 아이디어는 이 브라우저에만 보관됩니다.</p>
+        <p>CHAOS FORGE · PROJECT REFORGE ALPHA · 저장 자료는 이 브라우저에만 보관됩니다.</p>
       </footer>
-
-      <div className={`toast${toast ? ' is-show' : ''}`} id="toast" role="status" aria-live="polite">
-        {toast}
-      </div>
+      <div className={`toast${toast ? ' is-show' : ''}`} id="toast"
+        role="status" aria-live="polite">{toast}</div>
     </>
   );
 }
