@@ -73,11 +73,15 @@ function styleTags(keyword) {
   if(deriveTopics(keyword).includes('comedy'))tags.push('comic');
   return [...new Set(tags)];
 }
-export function isBanned(keyword,dna) {
+export function isExactBanned(keyword,dna) {
   const d=normalizeDNA(dna);
   const exact = new Set(d.bannedExact.map(norm));
   const allTexts=[keyword?.t,...Object.values(keyword?.forms||{})].filter(x=>typeof x==='string');
-  if(allTexts.some(t=>exact.has(norm(t))))return true;
+  return allTexts.some(t=>exact.has(norm(t)));
+}
+export function isBanned(keyword,dna) {
+  const d=normalizeDNA(dna);
+  if(isExactBanned(keyword,d))return true;
   if(deriveTopics(keyword).some(t=>d.bannedTopics.includes(t)))return true;
   if(styleTags(keyword).some(t=>d.bannedStyles.includes(t)))return true;
   return false;
@@ -86,7 +90,7 @@ export function isBanned(keyword,dna) {
 export function allowedKeywords(pool,dna) {
   if(!Array.isArray(pool))return [];
   const d=normalizeDNA(dna);
-  return d.banMode==='hard'?pool.filter(kw=>!isBanned(kw,d)):pool.slice();
+  return pool.filter(kw=>!isExactBanned(kw,d) && (d.banMode==='soft'||!isBanned(kw,d)));
 }
 /**
  * Base weights still dominate. The chosen axes have modest, capped influence:
