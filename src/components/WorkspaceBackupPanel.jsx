@@ -80,7 +80,7 @@ export default function WorkspaceBackupPanel({ onBackup, onRestore, currentCount
       <details className="full-backup-import" id="fullBackupImport">
         <summary>↺ 백업 파일에서 전체 복원하기 (기존 자료 교체)</summary>
         <div className="full-backup-import-body">
-          <p>먼저 위 버튼으로 <strong>현재 작업을 별도 백업</strong>해 두는 것을 권장해요. 파일을 선택하는 것만으로는 아무것도 바뀌지 않습니다.</p>
+          <p>먼저 위 버튼으로 <strong>현재 작업을 별도 백업</strong>해 두는 것을 권장해요. 파일을 선택하는 것만으로는 아무것도 바뀌지 않습니다. 복원하기 전 다른 CHAOS FORGE 탭을 닫아 주세요.</p>
           <label htmlFor="fullBackupFile">CHAOS FORGE V2 전체 백업 JSON 선택</label>
           <input id="fullBackupFile" type="file" accept=".json,application/json"
             onChange={selectFile}/>
@@ -104,10 +104,9 @@ export default function WorkspaceBackupPanel({ onBackup, onRestore, currentCount
                 disabled={!confirmed} onClick={restore}>검토한 백업으로 전체 복원</button>
             </div>
           )}
-          {status && <p className="full-backup-status" role="status" aria-live="polite">{status}</p>}
         </div>
       </details>
-      {!candidate && status && <p className="full-backup-status" role="status" aria-live="polite">{status}</p>}
+      {status && <p className="full-backup-status" role="status" aria-live="polite">{status}</p>}
     </section>
   );
 }
