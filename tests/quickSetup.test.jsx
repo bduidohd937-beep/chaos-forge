@@ -67,6 +67,7 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     expect(screen.getByRole('tab', { name: 'HERO' }).getAttribute('aria-selected')).toBe('true');
     expect(document.querySelectorAll('.result-card')).toHaveLength(9);
     go('FORGE');
+    fireEvent.click(screen.getByRole('button', { name: '전문 설정집 펼치기' }));
     expect(document.querySelector('.forge-outline').textContent).toContain('스킬 구성');
     go('SETUP');
     expect(screen.getByRole('button', { name: 'HERO 생성기 선택' }).getAttribute('aria-pressed')).toBe('true');

@@ -10,6 +10,7 @@ beforeEach(() => {
 });
 
 function setup() { return render(<App animationMs={0} />); }
+function expertMode() { fireEvent.click(screen.getByRole('button', { name: '전문 설정집 펼치기' })); }
 function page(target) {
   const button = Array.from(document.querySelectorAll('.workspace-tab'))
     .find((item) => item.textContent.includes(target));
@@ -26,9 +27,23 @@ const field = (id, generator = 'story') =>
   document.getElementById(`forge-field-${generator}-${id}`);
 
 describe('Alpha 4 FORGE studio UI', () => {
+  it('starts in novice-friendly simple mode and expands the same document without losing content', () => {
+    setup(); page('FORGE');
+    expect(screen.getByText('간편 작성')).not.toBeNull();
+    expect(document.querySelectorAll('.forge-outline-item')).toHaveLength(1);
+    expect(document.querySelectorAll('.forge-field')).toHaveLength(3);
+    fireEvent.change(field('logline'), { target: { value: '같은 문서를 계속 편집합니다' } });
+    fireEvent.click(screen.getByRole('button', { name: '전문 설정집 펼치기' }));
+    expect(document.querySelectorAll('.forge-outline-item')).toHaveLength(4);
+    expect(field('logline').value).toBe('같은 문서를 계속 편집합니다');
+    section('복선과 반전');
+    expect(field('reveal')).not.toBeNull();
+  });
+
   it('shows a STORY-specific outline, live progress and editable structured fields', () => {
     setup();
     page('FORGE');
+    expertMode();
     expect(document.querySelectorAll('.forge-outline-item')).toHaveLength(4);
     expect(document.querySelector('.forge-outline').textContent).toContain('복선과 반전');
     expect(field('logline')).not.toBeNull();
@@ -50,6 +65,7 @@ describe('Alpha 4 FORGE studio UI', () => {
       forgeDocs: { story: { title: '기존 제목', notes: '내가 먼저 적어 둔 메모' } }
     });
     const first = setup();
+    expertMode();
     expect(document.querySelector('#forgeTitleInput').value).toBe('기존 제목');
     expect(document.querySelector('#forgeNotesInput').value).toBe('내가 먼저 적어 둔 메모');
     fireEvent.change(field('logline'), { target: { value: '도시를 잃은 탐정' } });
@@ -57,6 +73,7 @@ describe('Alpha 4 FORGE studio UI', () => {
     fireEvent.change(field('worldRules'), { target: { value: '계약이 마법의 근원' } });
     first.unmount();
     setup();
+    expertMode();
     expect(document.querySelector('#forgeTitleInput').value).toBe('기존 제목');
     expect(document.querySelector('#forgeNotesInput').value).toBe('내가 먼저 적어 둔 메모');
     expect(field('logline').value).toBe('도시를 잃은 탐정');
@@ -72,7 +89,7 @@ describe('Alpha 4 FORGE studio UI', () => {
       generatorId: 'story', mode: 'genre', genre: '판', chaos: 3,
       results: { story: { values: { protagonist: '탐정', event: '시계의 정지', conflict: '도시 전체의 실종' }, locks: {} } }
     });
-    setup(); page('FORGE');
+    setup(); page('FORGE'); expertMode();
     fireEvent.change(field('logline'), { target: { value: '이미 작성한 문단은 지켜주세요.' } });
     const action = screen.getByRole('button', { name: '핵심 로그라인에 원본 키워드 가져오기' });
     fireEvent.click(action);
@@ -89,7 +106,7 @@ describe('Alpha 4 FORGE studio UI', () => {
     setup();
     const before = Array.from(document.querySelectorAll('.result-card'))
       .map((node) => node.querySelector('.card-value').textContent);
-    page('FORGE');
+    page('FORGE'); expertMode();
     fireEvent.change(field('logline'), { target: { value: '새로 추가하는 작품 설정' } });
     section('복선과 반전');
     fireEvent.change(field('reveal'), { target: { value: '사실은 시간의 신이었다' } });
@@ -100,11 +117,12 @@ describe('Alpha 4 FORGE studio UI', () => {
   });
 
   it('offers GAME/CHARACTER/HERO-specific fields and independent per-generator drafts', () => {
-    setup(); page('FORGE');
+    setup(); page('FORGE'); expertMode();
     fireEvent.change(field('logline'), { target: { value: '스토리 문서' } });
     page('CHAOS');
     fireEvent.click(screen.getByRole('tab', { name: 'GAME' }));
     page('FORGE');
+    expertMode();
     expect(field('logline')).toBeNull();
     section('핵심 플레이');
     expect(field('coreLoop', 'game')).not.toBeNull();
@@ -112,23 +130,26 @@ describe('Alpha 4 FORGE studio UI', () => {
     page('CHAOS');
     fireEvent.click(screen.getByRole('tab', { name: 'CHARACTER' }));
     page('FORGE');
+    expertMode();
     section('욕망과 상처');
     expect(field('wound', 'character')).not.toBeNull();
     page('CHAOS');
     fireEvent.click(screen.getByRole('tab', { name: 'HERO' }));
     page('FORGE');
+    expertMode();
     section('스킬 구성');
     expect(field('active','hero')).not.toBeNull();
     expect(field('ultimate','hero')).not.toBeNull();
     page('CHAOS');
     fireEvent.click(screen.getByRole('tab', { name: 'STORY' }));
     page('FORGE');
+    expertMode();
     expect(field('logline').value).toBe('스토리 문서');
     expect(Storage.loadDraft().forgeDocs.game.fields.coreLoop).toContain('영웅 강화');
   });
 
   it('can copy the full document and export JSON/Markdown independently of CHAOS export', () => {
-    setup(); page('FORGE');
+    setup(); page('FORGE'); expertMode();
     fireEvent.change(document.querySelector('#forgeTitleInput'), { target: { value: '매력적인 기획서' } });
     fireEvent.change(field('logline'), { target: { value: '마법을 잃은 주인공' } });
     const originalClick = HTMLAnchorElement.prototype.click;
@@ -153,7 +174,7 @@ describe('Alpha 4 FORGE studio UI', () => {
   });
 
   it('keeps source preview and normal navigation after editing', () => {
-    setup(); page('FORGE');
+    setup(); page('FORGE'); expertMode();
     expect(document.querySelector('.concept-preview')).not.toBeNull();
     expect(document.querySelector('.forge-source-details')).not.toBeNull();
     expect(document.querySelectorAll('.forge-outline-item')).toHaveLength(4);
