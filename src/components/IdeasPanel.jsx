@@ -33,7 +33,7 @@ export default function IdeasPanel({ ideas, total, search, onSearch, onLoad, onD
           const meta = [
             gen ? gen.tab : idea.generator,
             modeName(idea.mode),
-            GENRE_NAME_MAP[idea.genre] || idea.genre,
+            [idea.genres?.main || idea.genre, ...(idea.genres?.subs || [])].filter(Boolean).map((key) => GENRE_NAME_MAP[key] || key).join(' × '),
             formatDate(idea.updatedAt || idea.createdAt)
           ].join(' · ');
 

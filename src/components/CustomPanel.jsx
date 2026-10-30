@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { GENRE_NAME_MAP, GENERATORS, GENERATOR_MAP } from '../engine.js';
+import { GENRE_NAME_MAP, GENERATORS, GENERATOR_MAP, ALL_GENRES } from '../engine.js';
 
 export default function CustomPanel({ custom, onAdd, onDelete }) {
   const [generatorId, setGeneratorId] = useState(GENERATORS[0].id);
@@ -77,7 +77,7 @@ export default function CustomPanel({ custom, onAdd, onDelete }) {
         <fieldset className="genre-chips">
           <legend>장르 태그 (복수 선택 가능)</legend>
           <div id="customGenres" className="chips">
-            {generator.genreList.map((g) => (
+            {ALL_GENRES.map((g) => (
               <label className="chip" key={g.k}>
                 <input
                   type="checkbox"
