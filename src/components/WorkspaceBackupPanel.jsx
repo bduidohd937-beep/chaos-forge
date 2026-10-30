@@ -93,7 +93,7 @@ export default function WorkspaceBackupPanel({ onBackup, onRestore, currentCount
                 <span>아이디어</span><span>{currentCounts.ideas}</span><strong>{candidate.summary.ideas}</strong>
                 <span>사용자 키워드</span><span>{currentCounts.custom}</span><strong>{candidate.summary.custom}</strong>
                 <span>이전 작업 기록</span><span>{currentCounts.archives}</span><strong>{candidate.summary.archives}</strong>
-                <span>작성된 FORGE 문서</span><span>현재 작업 포함</span><strong>{candidate.summary.forgeDocs}</strong>
+                <span>작성된 FORGE 문서</span><span>{currentCounts.forgeDocs}</span><strong>{candidate.summary.forgeDocs}</strong>
               </div>
               <p>백업 생성일: {new Date(candidate.backup.createdAt).toLocaleString('ko-KR')}</p>
               <label className="full-backup-consent">
