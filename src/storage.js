@@ -65,6 +65,9 @@ function write(key, value) {
     return false;
   }
   try {
+    // A pending failed import must not be overwritten by unrelated UI writes.
+    // The durable rollback journal is handled only by restore/recovery methods.
+    if (store.getItem(RESTORE_JOURNAL_KEY) !== null) return false;
     store.setItem(key, JSON.stringify(value));
     return true;
   } catch {
