@@ -147,6 +147,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   );
   const [genre, setGenre] = useState(initialSelection.main);
   const [subgenres, setSubgenres] = useState(initialSelection.subs);
+  const [setupAdvancedEntry, setSetupAdvancedEntry] = useState(false);
   const [workspacePage, setWorkspacePage] = useState(
     () => ['setup','chaos','forge','library'].includes(draft?.workspacePage)
       ? draft.workspacePage : 'chaos'
@@ -764,7 +765,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             <button type="button" key={page.id}
               className={`workspace-tab${page.id === workspacePage ? ' selected' : ''}`}
               aria-current={workspacePage === page.id ? 'page' : undefined}
-              onClick={() => { clearAnimations(); setWorkspacePage(page.id); }}>
+              onClick={() => { clearAnimations(); setSetupAdvancedEntry(false); setWorkspacePage(page.id); }}>
               <small>{String(index + 1).padStart(2, '0')}</small>
               <strong>{page.en}</strong>
               <span>{page.ko}</span>
@@ -794,6 +795,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             chaos={chaos}
             onChaosChange={setChaos}
             dna={dna} onDNAChange={updateDNA} keywordCoverage={keywordCoverage}
+            initialAdvanced={setupAdvancedEntry}
             onBegin={beginCreation}
           />
         )}
@@ -817,7 +819,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                   </button>
                 ))}
               </nav>
-              <button type="button" className="v2-edit-setup" onClick={() => setWorkspacePage('setup')}>
+              <button type="button" className="v2-edit-setup" onClick={() => { setSetupAdvancedEntry(false); setWorkspacePage('setup'); }}>
                 설정 편집 ↗
               </button>
             </div>
@@ -834,7 +836,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <span>CREATIVE DNA</span>
               <strong>{dna.detail==='brief'?'간결':dna.detail==='detailed'?'구체적':'기본'} 표현 · 독창성 {dna.novelty}/4</strong>
               <span>⛔ 차단 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
-              <button type="button" className="btn btn-outline" onClick={()=>setWorkspacePage('setup')}>취향·밴 편집</button>
+              <button type="button" className="btn btn-outline" onClick={()=>{ setSetupAdvancedEntry(true); setWorkspacePage('setup'); }}>취향·밴 편집</button>
             </div>
 
             <div className="mutation-deck" aria-label="CHAOS FORGE 변이 방식">
