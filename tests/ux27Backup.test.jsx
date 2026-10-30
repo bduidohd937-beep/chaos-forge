@@ -185,4 +185,39 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     expect(document.querySelector('.full-backup-compare')).toBeNull();
     expect(document.querySelector('#confirmFullRestoreBtn')).toBeNull();
   });
+
+  it('offers one-click local JSON export, with a download-started message not a false cloud-save claim', () => {
+    start();
+    toLibrary();
+    const originalCreate=URL.createObjectURL;
+    const originalRevoke=URL.revokeObjectURL;
+    const originalClick=HTMLAnchorElement.prototype.click;
+    const names=[];
+    try {
+      URL.createObjectURL=vi.fn(()=>'blob:workspace-backup');
+      URL.revokeObjectURL=vi.fn();
+      HTMLAnchorElement.prototype.click=function(){names.push(this.download);};
+      fireEvent.click(document.querySelector('#downloadFullBackupBtn'));
+      expect(names).toHaveLength(1);
+      expect(names[0]).toMatch(/chaos-forge-v2-workspace-backup.*\.json$/);
+      expect(document.querySelector('.full-backup-status').textContent).toContain('다운로드를 시작');
+      expect(document.querySelector('.full-backup-import')).not.toBeNull();
+    } finally {
+      URL.createObjectURL=originalCreate;
+      URL.revokeObjectURL=originalRevoke;
+      HTMLAnchorElement.prototype.click=originalClick;
+    }
+  });
+
+  it('blocks unrelated idea and draft writes while a failed recovery journal remains unresolved', () => {
+    localStorage.setItem(storageKey('restore-transaction'),'invalid');
+    expect(WorkspaceStore.recoverInterruptedRestore()).toBe('failed');
+    expect(WorkspaceStore.saveDraft(fixture().draft)).toBe(false);
+    expect(WorkspaceStore.saveIdea({
+      title:'보호 중',generator:'story',values:{setting:'수정 금지'}
+    })).toBeNull();
+    expect(localStorage.getItem(storageKey('draft'))).toBeNull();
+    expect(localStorage.getItem(storageKey('ideas'))).toBeNull();
+    expect(localStorage.getItem(storageKey('restore-transaction'))).toBe('invalid');
+  });
 });
