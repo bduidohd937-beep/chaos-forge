@@ -19,13 +19,13 @@ beforeEach(()=>{
 describe('CREATIVE DNA — user-facing generation and preferences',()=>{
   it('settings lab persists detail, novelty and mood after navigation and reload',()=>{
     const mounted=run();open('SETUP');
-    fireEvent.click(screen.getByRole('button',{name:/구체적.*배경/}));
+    fireEvent.click(screen.getByRole('button',{name:/구체설정.*배경/}));
     fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
     fireEvent.change(document.querySelector('#dnaNovelty'),{target:{value:'4'}});
     fireEvent.change(document.querySelector('#dnaMood'),{target:{value:'dark'}});
     expect(Storage.loadDraft().creativeDNA).toMatchObject({detail:'detailed',novelty:4,mood:'dark'});
     open('CHAOS');
-    expect(document.querySelector('.dna-active-summary').textContent).toContain('구체적');
+    expect(document.querySelector('.dna-active-summary').textContent).toContain('구체설정');
     mounted.unmount();run();open('SETUP');
     fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
     expect(document.querySelector('#dnaNovelty').value).toBe('4');
@@ -84,7 +84,7 @@ describe('CREATIVE DNA — user-facing generation and preferences',()=>{
     expect(document.querySelector('.mutation-result').textContent).toContain('RIFT');
     expect(Storage.loadDraft().creativeDNA.novelty).toBe(2);
     expect(Storage.loadDraft().chaos).toBe(3);
-    expect(Storage.loadDraft().mode).toBe('hybrid');
+    expect(Storage.loadDraft().mode).toBe('genre');
   });
   it('hard bans never clear old results if an entire slot is blocked',()=>{
     const current=run();
