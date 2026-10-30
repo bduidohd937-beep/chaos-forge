@@ -22,6 +22,7 @@ export default function ForgeWorkspace({
   onExport,
   onCopyDocument,
   onCopy,
+  onGenerateSeed,
   onBack,
   saved
 }) {
@@ -123,6 +124,7 @@ export default function ForgeWorkspace({
           onClick={simpleMode ? openExpert : () => setSimpleMode(true)}>
           {simpleMode ? '전문 설정집 펼치기' : '간편 작성으로 돌아가기'}
         </button>
+        {generator.id === 'game' && <button type="button" className="btn btn-primary" onClick={onGenerateSeed}>게임 설계 초안 채우기</button>}
       </div>
 
       <div className="forge-studio-layout">

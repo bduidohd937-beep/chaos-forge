@@ -25,6 +25,7 @@ import CustomPanel from './components/CustomPanel.jsx';
 import ConceptPreview from './components/ConceptPreview.jsx';
 import { buildConceptPreview } from './synthesis.js';
 import { SYNERGY_LEVELS } from './synergy.js';
+import { mergeGameDesignSeed } from './designForge.js';
 import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
 import {
   normalizeDNA, banExact, toggleLike, deriveTopics,
@@ -1287,6 +1288,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             generator={gen} values={current.values} preview={preview}
             isRolling={isRolling} lockedCount={lockedCount} doc={forgeDocs[generatorId] || {}}
             onUpdate={updateForgeDoc} onUpdateField={updateForgeField}
+            onGenerateSeed={() => setForgeDocs((prev) => ({ ...prev, game: mergeGameDesignSeed(prev.game, current.values) }))}
             onImportField={importForgeField}
             onExport={exportForgeDocument} onCopyDocument={copyForgeDocument}
             onCopy={copyConcept} saved={draftSaved}
