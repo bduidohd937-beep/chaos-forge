@@ -83,6 +83,7 @@ describe('CHAOS FORGE UI', () => {
   it('랜덤 모드에 따라 혼돈 컨트롤이 활성/비활성된다', () => {
     setup();
     go('SETUP');
+    click(screen.getByRole('button', { name: /고급 설정/ }));
     click(screen.getByRole('radio', { name: '장르 맞춤' }));
     expect(document.querySelector('#chaosRange').disabled).toBe(true);
     expect(document.querySelector('#chaosControl').classList.contains('is-disabled')).toBe(true);
@@ -419,6 +420,7 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
   it('메인 장르 하나와 서브 장르 최대 3개를 자유롭게 선택한다', () => {
     setup();
     go('SETUP');
+    click(screen.getByRole('button', { name: /서브 장르 선택/ }));
     const tile = (name) => Array.from(document.querySelectorAll('.genre-tile'))
       .find((node) => node.textContent.includes(name));
     ['로맨스', '미스터리', '코미디'].forEach(name => click(tile(name)));
@@ -437,6 +439,7 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
     const first = setup();
     go('SETUP');
     fireEvent.change(document.querySelector('#genreSelect'), { target: { value: 'SF' } });
+    click(screen.getByRole('button', { name: /서브 장르 선택/ }));
     const chip = Array.from(document.querySelectorAll('.genre-tile'))
       .find(node => node.textContent.includes('로맨스'));
     click(chip);
@@ -482,6 +485,7 @@ describe('V2.0 PROJECT REFORGE — 분리형 작업 공간', () => {
     setup();
     go('SETUP');
     fireEvent.change(document.querySelector('#genreSelect'), { target: { value: '판' } });
+    click(screen.getByRole('button', { name: /서브 장르 선택/ }));
     const romance = Array.from(document.querySelectorAll('.genre-tile'))
       .find(node => node.textContent.includes('로맨스'));
     click(romance);
@@ -578,6 +582,7 @@ describe('V2.0 Alpha 가독성·화면 구성 검수', () => {
   it('설정실은 추천 장르부터 보여주며 전체 펼치기 및 검색을 지원한다', () => {
     setup();
     go('SETUP');
+    click(screen.getByRole('button', { name: /서브 장르 선택/ }));
     const list = () => Array.from(document.querySelectorAll('.genre-tile'));
     const initialCount = list().length;
     expect(initialCount).toBeGreaterThan(5);
@@ -594,6 +599,7 @@ describe('V2.0 Alpha 가독성·화면 구성 검수', () => {
   it('추천에 없는 장르도 최대 세 개까지 선택하고 검색 결과에 잠금 상태를 표시한다', () => {
     setup();
     go('SETUP');
+    click(screen.getByRole('button', { name: /서브 장르 선택/ }));
     const search = document.querySelector('#subGenreSearch');
     fireEvent.change(search, { target: { value: '스팀펑크' } });
     const tile = document.querySelector('.genre-tile');
