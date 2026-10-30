@@ -19,6 +19,8 @@ import { DATA_GAME } from './data/game.js';
 import { DATA_CHARACTER } from './data/character.js';
 import { DATA_HERO } from './data/hero.js';
 import { ALPHA3_KEYWORDS } from './data/alpha3.js';
+import { ALPHA5_LIBRARY } from './data/alpha5.js';
+import { allowedKeywords, dnaWeight, renderedText, normalizeDNA } from './creativeDNA.js';
 import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
 import { planGenreSlots } from './composition.js';
 
@@ -156,8 +158,15 @@ export function isOutOfGenre(keyword, genreKey) {
  * @param {Array} pool K() 항목 배열
  * @param {{mode?: string, genre?: string, chaos?: number, rng?: () => number}} opts
  */
-export function pickKeyword(pool, opts = {}) {
-  if (!pool || pool.length === 0) return null;
+export function pickKeyword(inputPool, opts = {}) {
+  if (!inputPool || inputPool.length === 0) return null;
+  // The strict BAN filter comes BEFORE genre weighting, all fallbacks,
+  // and even before random mode. No hidden escape to banned keywords.
+  const pool = opts.dna ? allowedKeywords(inputPool, opts.dna).map(kw => ({
+    ...kw,
+    w: (Number(kw.w)>0?kw.w:1) * dnaWeight(kw, opts.dna, opts)
+  })) : inputPool;
+  if (!pool.length) return null;
   const mode = opts.mode || 'hybrid';
   const genre = opts.genre || '';
   const rng = typeof opts.rng === 'function' ? opts.rng : Math.random;
@@ -216,7 +225,11 @@ export function pickKeyword(pool, opts = {}) {
 export function getPool(generatorId, slotKey, customKeywords = []) {
   const gen = GENERATOR_MAP[generatorId];
   if (!gen) return [];
-  const base = [...(gen.data[slotKey] || []), ...(ALPHA3_KEYWORDS[generatorId]?.[slotKey] || [])];
+  const base = [
+    ...(gen.data[slotKey] || []),
+    ...(ALPHA3_KEYWORDS[generatorId]?.[slotKey] || []),
+    ...(ALPHA5_LIBRARY[generatorId]?.[slotKey] || [])
+  ];
   for (const item of customKeywords) {
     if (item.generator === generatorId && item.slot === slotKey) {
       base.push(K(item.text, item.genres || [], item.genres || [], item.weight || 1));
@@ -246,9 +259,10 @@ export function generateResult(generatorId, opts = {}) {
   const values = opts.values || {};
   const recent = opts.recent || {};
   const result = {};
-  const pools = Object.fromEntries(
-    gen.slots.map((slot) => [slot.key, getPool(generatorId, slot.key, opts.custom)])
-  );
+  const pools = Object.fromEntries(gen.slots.map((slot) => {
+    const whole = getPool(generatorId, slot.key, opts.custom);
+    return [slot.key, opts.dna ? allowedKeywords(whole, opts.dna) : whole];
+  }));
   const assignments = opts.genres
     ? planGenreSlots({
       generatorId,
@@ -279,9 +293,14 @@ export function generateResult(generatorId, opts = {}) {
       ...opts,
       generatorId,
       preferredGenre: assignments[slot.key],
-      exclude
+      exclude,
+      previousTopics: opts.previousTopics || []
     });
-    result[slot.key] = kw ? kw.t : '';
+    // If user excludes EVERYTHING, do not generate anything banned, and
+    // never erase the previous result silently.
+    result[slot.key] = kw
+      ? (opts.dna ? renderedText(kw, opts.dna) : kw.t)
+      : (typeof values[slot.key] === 'string' ? values[slot.key] : '');
   }
   return result;
 }
@@ -294,5 +313,26 @@ export function rerollSlot(generatorId, slotKey, opts = {}) {
     opts.previous
   ];
   const kw = pickKeyword(pool, { ...opts, generatorId, exclude });
-  return kw ? kw.t : '';
+  return kw ? (opts.dna ? renderedText(kw, opts.dna) : kw.t) : (opts.previous || '');
+}
+
+/** Preview counts and strict BAN shortages without altering any saved results. */
+export function auditDNACoverage(generatorId, dna, custom = [], locks = {}, values = {}) {
+  const gen = GENERATOR_MAP[generatorId];
+  if (!gen) return { empty: [], blockedLocked: [], available: 0 };
+  const d = normalizeDNA(dna);
+  const empty = [], blockedLocked = [];
+  let available = 0;
+  for (const slot of gen.slots) {
+    const pool = getPool(generatorId,slot.key,custom);
+    const allowed = allowedKeywords(pool,d);
+    available += allowed.length;
+    if (!locks[slot.key] && !allowed.length) empty.push(slot.label);
+    if (locks[slot.key] && values[slot.key] &&
+      pool.some(kw => Object.values(kw.forms||{}).includes(values[slot.key]) || kw.t===values[slot.key]) &&
+      !allowed.some(kw => Object.values(kw.forms||{}).includes(values[slot.key]) || kw.t===values[slot.key])) {
+      blockedLocked.push(slot.label);
+    }
+  }
+  return { empty, blockedLocked, available };
 }
