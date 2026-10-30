@@ -1,5 +1,5 @@
-import { beforeEach, cleanup, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import App from '../src/App.jsx';
 import Storage from '../src/storage.js';
 import { getForgeTemplate } from '../src/forgeSchema.js';
