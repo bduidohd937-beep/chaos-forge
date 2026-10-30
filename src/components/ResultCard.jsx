@@ -29,7 +29,11 @@ export default function ResultCard({
   settled = false,
   onChange,
   onLock,
-  onReroll
+  onReroll,
+  onBan,
+  onLike,
+  isLiked = false,
+  isBanned = false
 }) {
   const valueRef = useRef(null);
 
@@ -59,6 +63,20 @@ export default function ResultCard({
             onClick={onLock}
             dangerouslySetInnerHTML={{ __html: locked ? ICONS.lockClosed : ICONS.lockOpen }}
           />
+          <button type="button" className={`icon-btn js-like${isLiked?' is-on':''}`}
+            aria-pressed={isLiked}
+            aria-label={isLiked?`${label} 취향 저장 취소`:`${label} 취향 저장`}
+            title={isLiked?'좋아요 취소':'좋아요 · 내 취향으로 저장'}
+            disabled={spinning} onClick={onLike}>
+            {isLiked?'★':'☆'}
+          </button>
+          <button type="button" className={`icon-btn js-ban${isBanned?' is-on':''}`}
+            aria-pressed={isBanned}
+            aria-label={isBanned?`${label} 문구 차단 해제`:`${label} 문구 제외`}
+            title={isBanned?'차단 해제':'이 문구를 앞으로 제외'}
+            disabled={spinning} onClick={onBan}>
+            {isBanned?'⊘':'×'}
+          </button>
           <button
             type="button"
             className="icon-btn js-reroll"
