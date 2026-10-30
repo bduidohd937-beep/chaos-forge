@@ -40,6 +40,55 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     expect(screen.getByRole('button', { name: /고급 설정/ }).getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('uses compact four-pill type switcher above the genre/style panels', () => {
+    start(); go('SETUP');
+    const switcher = document.querySelector('.quick-generator-step .quick-generator-tabs');
+    expect(switcher).not.toBeNull();
+    expect(switcher.getAttribute('aria-label')).toBe('창작 유형 선택');
+    expect(switcher.querySelectorAll('.setup-generator')).toHaveLength(4);
+    expect(switcher.querySelectorAll('.setup-generator small')).toHaveLength(0);
+    expect(document.querySelector('.quick-setup-flow').firstElementChild.classList.contains('quick-generator-step')).toBe(true);
+    expect(document.querySelector('.quick-setup-grid').children).toHaveLength(2);
+    expect(document.querySelector('.quick-setup-grid .quick-style')).not.toBeNull();
+    expect(document.querySelector('.quick-setup-grid #genreSelect')).not.toBeNull();
+    const game = screen.getByRole('button', { name: 'GAME 생성기 선택' });
+    click(game);
+    expect(game.getAttribute('aria-pressed')).toBe('true');
+    expect(Storage.loadDraft().generatorId).toBe('game');
+    expect(document.querySelector('.quick-setup-review').textContent).toContain('GAME');
+    expect(screen.getByRole('button', { name: 'STORY 생성기 선택' }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps the selected generator across CHAOS and shows its specialist FORGE structure', () => {
+    start(); go('SETUP');
+    click(screen.getByRole('button', { name: 'HERO 생성기 선택' }));
+    click(screen.getByRole('button', { name: /이 설정으로 창조하기/ }));
+    expect(document.querySelector('[data-screen]').dataset.screen).toBe('chaos');
+    expect(screen.getByRole('tab', { name: 'HERO' }).getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelectorAll('.result-card')).toHaveLength(9);
+    go('FORGE');
+    expect(document.querySelector('.forge-outline').textContent).toContain('스킬 구성');
+    go('SETUP');
+    expect(screen.getByRole('button', { name: 'HERO 생성기 선택' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('groups creation recipe and DNA on one context strip and mutation with draw actions', () => {
+    start();
+    const context = document.querySelector('.chaos-context-strip');
+    expect(context.querySelector('.chaos-formula')).not.toBeNull();
+    expect(context.querySelector('.dna-active-summary')).not.toBeNull();
+    const deck = document.querySelector('.chaos-control-deck');
+    expect(deck.querySelector('.mutation-controls-wrap')).not.toBeNull();
+    expect(deck.querySelector('#generateBtn')).not.toBeNull();
+    expect(deck.querySelector('.reel-presets')).not.toBeNull();
+    expect(document.querySelector('.mutation-deck')).toBeNull();
+    click(screen.getByRole('button', { name: 'RIFT' }));
+    expect(Storage.loadDraft().creativeDNA.mutation).toBe('rift');
+    click(screen.getByRole('button', { name: 'ECHO' }));
+    expect(Storage.loadDraft().creativeDNA.mutation).toBe('echo');
+    expect(document.querySelectorAll('.result-card')).toHaveLength(8);
+  });
+
   it('user can create without opening any optional controls', () => {
     start(); go('SETUP');
     fireEvent.change(document.querySelector('#genreSelect'), { target: { value: '미' } });
