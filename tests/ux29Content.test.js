@@ -3,6 +3,7 @@ import { ALL_GENRES, GENERATORS, getPool, getEligiblePool, generateResult, rerol
 import { REFORGE_LIBRARY, REFORGE_COUNT, isReforgeReady } from '../src/data/reforge29Library.js';
 import { ALPHA5_LIBRARY } from '../src/data/alpha5.js';
 import { genreAffinity } from '../src/genreMix.js';
+import { QUALITY30_LIBRARY } from '../src/data/quality30.js';
 
 const isSingleWord = text => typeof text === 'string' && !!text.trim() && !/\s/.test(text);
 const seed = () => 0.31;
@@ -47,7 +48,7 @@ describe('UX 2.9 curated three-depth creative content', () => {
   it('built-in live pool contains only full, explicit forms for each depth', () => {
     for (const gen of GENERATORS) for (const slot of gen.slots) {
       const pool = getEligiblePool(gen.id,slot.key,[],{detail:'brief'});
-      expect(pool).toHaveLength(10);
+      expect(pool).toHaveLength(10 + (QUALITY30_LIBRARY[gen.id]?.[slot.key]?.length || 0));
       expect(pool.every(isReforgeReady)).toBe(true);
       expect(pool.every(kw=>isSingleWord(kw.forms.brief))).toBe(true);
     }
