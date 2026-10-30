@@ -12,9 +12,9 @@ const MODE_HINTS = {
   random: '제약 없이 발견'
 };
 const DETAILS = [
-  ['brief', '간결', '소재 중심 · 상상의 여지'],
-  ['balanced', '기본', '설정 한 문장'],
-  ['detailed', '구체적', '배경·갈등까지']
+  ['brief', '키워드', '한 단어 · 소재 중심'],
+  ['balanced', '기본문장', '설정 한 문장'],
+  ['detailed', '구체설정', '배경·원인·대가']
 ];
 const detailName = (detail) => DETAILS.find(item => item[0] === detail)?.[1] || '기본';
 
@@ -149,7 +149,7 @@ export default function SetupScreen({
           <span className="setup-step">03</span>
           <div>
             <h3 id="quickStyleHeading">어떤 느낌으로 만들까요?</h3>
-            <p>추첨 방식과 문장의 길이만 고르면 준비 끝!</p>
+            <p>추첨 방식과 결과의 구체성을 고르면 준비 끝!</p>
           </div>
         </div>
         <div className="quick-style-controls">
@@ -183,7 +183,7 @@ export default function SetupScreen({
                 </button>
               ))}
             </div>
-            <p className="dna-hint">3단계 표현이 있는 키워드는 문장이 달라지고, 기존 키워드는 원문이 유지될 수 있어요.</p>
+            <p className="dna-hint">기본 제공 소재는 한 단어·기본문장·구체설정을 별도로 작성했어요. 직접 추가한 소재는 입력한 문구를 그대로 사용해요.</p>
           </fieldset>
         </div>
       </section>
