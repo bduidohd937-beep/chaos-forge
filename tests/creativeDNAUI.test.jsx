@@ -34,8 +34,8 @@ describe('CREATIVE DNA — user-facing generation and preferences',()=>{
   it('topic and style BAN selections can be saved and reversed',()=>{
     run();open('SETUP');
     fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
-    const control=document.querySelector('.dna-ban-details');
-    fireEvent.click(control.querySelector('summary'));
+    const control=document.querySelector('.ban-panel');
+    fireEvent.click(control.querySelector('.ban-manage-toggle'));
     const zombie=screen.getByLabelText('좀비·언데드');
     fireEvent.click(zombie);
     const dark=screen.getByLabelText('어두운 분위기 차단');
@@ -53,9 +53,8 @@ describe('CREATIVE DNA — user-facing generation and preferences',()=>{
     expect(Storage.loadDraft().creativeDNA.bannedExact).toContain(first);
     fireEvent.click(document.querySelector('#generateBtn'));
     expect(card.querySelector('.card-value').textContent).not.toBe(first);
-    open('SETUP');
-    fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
-    fireEvent.click(document.querySelector('.dna-ban-details summary'));
+    fireEvent.click(document.querySelector('#openBanManagerBtn'));
+    expect(document.querySelector('.chaos-preference-editor')).not.toBeNull();
     expect(document.querySelector('.dna-exact-list').textContent).toContain(first);
   });
   it('liking a result persists user preference without banning it',()=>{
