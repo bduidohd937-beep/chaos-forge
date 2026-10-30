@@ -3,7 +3,7 @@ name: Deploy CHAOS FORGE (V1 + V2 Preview)
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch
 
 permissions:
   contents: read
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REVIEWED_V2_SHA: ce97c2f4075495bea3792698063a066d6722f0a7
+  REVIEWED_V2_SHA: 5f253acc423df271e0103ba78277c7616a29ef9d
 
 jobs:
   build:
