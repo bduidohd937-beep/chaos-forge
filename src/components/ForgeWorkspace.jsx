@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import ConceptPreview from './ConceptPreview.jsx';
 import {
   getForgeTemplate, forgeProgress, forgeSourceLines, normalizeForgeDoc
@@ -27,22 +27,45 @@ export default function ForgeWorkspace({
 }) {
   const [sectionId, setSectionId] = useState(null);
   const [simpleMode, setSimpleMode] = useState(true);
+  const editorRef = useRef(null);
   const template = getForgeTemplate(generator.id);
   const normalized = normalizeForgeDoc(generator.id, doc);
   const coreSection = template.sections[0];
   const progress = forgeProgress(generator.id, normalized);
-  const coreProgress = {
-    completed: coreSection.fields.filter((field) => normalized.fields[field.id].trim()).length,
-    total: coreSection.fields.length
-  };
-  const shownProgress = simpleMode
-    ? { ...coreProgress, percent: Math.round(coreProgress.completed / coreProgress.total * 100) }
-    : progress;
-  const selected = template.sections.find((section) => section.id === sectionId) || template.sections[0];
-  const visibleSections = simpleMode ? [coreSection] : template.sections;
-  const visibleFields = simpleMode ? coreSection.fields : selected.fields;
   const sectionFilled = (section) =>
     section.fields.filter((field) => normalized.fields[field.id].trim()).length;
+
+  // The simple editor always points to the core section, even if the user
+  // visited a later expert stage. All modes edit the exact same normalized doc.
+  const expertSelected = template.sections.find(section => section.id === sectionId) || coreSection;
+  const selected = simpleMode ? coreSection : expertSelected;
+  const selectedIndex = template.sections.findIndex(section => section.id === selected.id);
+  const coreProgress = {
+    completed: sectionFilled(coreSection),
+    total: coreSection.fields.length
+  };
+  const stageProgress = {
+    completed: sectionFilled(selected),
+    total: selected.fields.length
+  };
+  const shownProgress = simpleMode ? coreProgress : stageProgress;
+  const shownPercent = shownProgress.total
+    ? Math.round(shownProgress.completed / shownProgress.total * 100) : 0;
+  const visibleSections = simpleMode ? [coreSection] : template.sections;
+  const visibleFields = simpleMode ? coreSection.fields : selected.fields;
+  const nextSection = template.sections[selectedIndex + 1];
+
+  const openStage = (index) => {
+    const destination = template.sections[index];
+    if (!destination) return;
+    setSectionId(destination.id);
+    setSimpleMode(false);
+    if (typeof editorRef.current?.scrollIntoView === 'function') {
+      editorRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  };
+
+  const openExpert = () => openStage(0);
 
   return (
     <section className="v2-screen forge-screen" aria-labelledby="forgeTitle">
@@ -54,12 +77,12 @@ export default function ForgeWorkspace({
 
       <div className="forge-topbar">
         <div className="forge-progress-summary" aria-live="polite">
-          <span className="forge-progress-label">{simpleMode ? '핵심 작성 진행도' : '전문 기획서 작성 진행도'}</span>
+          <span className="forge-progress-label">{simpleMode ? '핵심 작성 진행도' : `현재 단계 · ${selectedIndex + 1} / ${template.sections.length}`}</span>
           <strong>{shownProgress.completed}<small> / {shownProgress.total} 항목</small></strong>
           <div className="forge-progress-track" role="progressbar" aria-valuemin="0"
             aria-valuemax={shownProgress.total} aria-valuenow={shownProgress.completed}
-            aria-label="구조화된 기획서 작성 진행도">
-            <span style={{ width: `${shownProgress.percent}%` }} />
+            aria-label={simpleMode ? '핵심 항목 작성 진행도' : `${selected.title} 단계 작성 진행도`}>
+            <span style={{ width: `${shownPercent}%` }} />
           </div>
         </div>
         <div className="forge-export-actions">
@@ -78,9 +101,10 @@ export default function ForgeWorkspace({
       <div className="forge-mode-switch" role="group" aria-label="FORGE 작성 모드">
         <div>
           <strong>{simpleMode ? '간편 작성' : '전문 설정집'}</strong>
-          <p>{simpleMode ? '핵심 3개만 먼저 적고, 나머지는 필요할 때 펼쳐 보세요.' : '기존 4개 섹션과 모든 세부 항목을 한 문서에서 편집합니다.'}</p>
+          <p>{simpleMode ? '첫 3개만 작성하세요. 완성하면 다음 단계로 안내해 드려요.' : '한 단계씩 작성할 수 있어요. 다른 단계는 목차에서 선택하세요.'}</p>
         </div>
-        <button type="button" className="btn btn-outline" onClick={() => setSimpleMode((value) => !value)}>
+        <button type="button" className="btn btn-outline"
+          onClick={simpleMode ? openExpert : () => setSimpleMode(true)}>
           {simpleMode ? '전문 설정집 펼치기' : '간편 작성으로 돌아가기'}
         </button>
       </div>
@@ -89,7 +113,9 @@ export default function ForgeWorkspace({
         <aside className="v2-panel forge-outline" aria-label="기획서 목차">
           <p className="v2-kicker">DOCUMENT OUTLINE</p>
           <h3>설계 목차</h3>
-          <p className="forge-outline-help">작업할 항목을 선택하세요. 다른 항목으로 이동해도 작성한 내용은 유지됩니다.</p>
+          <p className="forge-outline-help">{simpleMode
+            ? '먼저 핵심 3개만 적어 보세요. 모든 내용은 계속 보관돼요.'
+            : '4단계 중 하나를 선택하세요. 한 번에 한 단계씩 편집하며, 작성한 내용은 그대로 유지돼요.'}</p>
           <nav className="forge-outline-nav" aria-label="편집 섹션">
             {visibleSections.map((section, index) => {
               const done = sectionFilled(section);
@@ -98,7 +124,7 @@ export default function ForgeWorkspace({
                   className={`forge-outline-item${selected.id === section.id ? ' selected' : ''}`}
                   aria-current={selected.id === section.id ? 'step' : undefined}
                   aria-controls="forge-fields-panel"
-                  onClick={() => setSectionId(section.id)}>
+                  onClick={() => openStage(template.sections.findIndex(item => item.id === section.id))}>
                   <span className="forge-outline-index">{String(index + 1).padStart(2,'0')}</span>
                   <span className="forge-outline-name">
                     <strong>{section.title}</strong>
@@ -119,7 +145,7 @@ export default function ForgeWorkspace({
         </aside>
 
         <div className="forge-content-stack">
-          <section className="v2-panel forge-editor" id="forge-fields-panel"
+          <section className="v2-panel forge-editor" ref={editorRef} id="forge-fields-panel"
             aria-label={`${selected.title} 편집`}>
             <div className="forge-document-head">
               <div>
@@ -127,7 +153,7 @@ export default function ForgeWorkspace({
                 <h3>{generator.tab} 기획서</h3>
               </div>
               <span className="forge-section-count">
-                {simpleMode ? '핵심 3개' : `${template.sections.findIndex((section) => section.id === selected.id) + 1} / ${template.sections.length}`}
+                {simpleMode ? '핵심 3개' : `단계 ${selectedIndex + 1} / ${template.sections.length}`}
               </span>
             </div>
             <label htmlFor="forgeTitleInput">작품 제목</label>
@@ -172,6 +198,54 @@ export default function ForgeWorkspace({
                 );
               })}
             </div>
+
+            {simpleMode && (
+              <div className={`forge-guided-next${coreProgress.completed === coreProgress.total ? ' is-ready' : ''}`}
+                aria-live="polite">
+                {coreProgress.completed === coreProgress.total ? (
+                  <>
+                    <div>
+                      <strong>✓ 핵심 3개를 다 작성했어요!</strong>
+                      <p>이제 {template.sections[1].title} 단계로 이어서 작품을 발전시켜 보세요. 지금 쓴 글은 그대로 유지돼요.</p>
+                    </div>
+                    <button type="button" className="btn btn-primary" id="forgeNextCore"
+                      onClick={() => openStage(1)}>
+                      다음 단계 · {template.sections[1].title} →
+                    </button>
+                  </>
+                ) : (
+                  <div>
+                    <strong>✧ 핵심 아이디어부터 채워 보세요.</strong>
+                    <p>현재 {coreProgress.completed} / {coreProgress.total}개 작성했어요. 다 채우면 다음 단계를 추천해 드려요. 꼭 순서대로 작성할 필요는 없어요.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!simpleMode && (
+              <nav className="forge-stage-controls" aria-label="전문 설정집 단계 이동">
+                {selectedIndex > 0 ? (
+                  <button type="button" className="btn btn-outline" id="forgePreviousStage"
+                    onClick={() => openStage(selectedIndex - 1)}>
+                    ← 이전 · {template.sections[selectedIndex - 1].title}
+                  </button>
+                ) : <span className="forge-stage-start">첫 번째 단계</span>}
+                <span className="forge-stage-progress" aria-live="polite">
+                  {selected.title} · {stageProgress.completed} / {stageProgress.total} 작성
+                </span>
+                {nextSection ? (
+                  <button type="button" className="btn btn-primary" id="forgeNextStage"
+                    onClick={() => openStage(selectedIndex + 1)}>
+                    다음 · {nextSection.title} →
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-outline" id="forgeReviewStages"
+                    onClick={() => openStage(0)}>
+                    전체 단계 다시 살펴보기 ↺
+                  </button>
+                )}
+              </nav>
+            )}
           </section>
 
           <section className="v2-panel forge-notes-panel" aria-labelledby="forgeNotesTitle">
