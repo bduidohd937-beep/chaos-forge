@@ -26,6 +26,7 @@ import { planGenreSlots } from './composition.js';
 import { preferFreshKeywords } from './quality.js';
 import { REFORGE_LIBRARY, isReforgeReady, withSingleWordAlias } from './data/reforge29Library.js';
 import { QUALITY30_LIBRARY } from './data/quality30.js';
+import { QUALITY11_LIBRARY } from './data/quality11.js';
 
 export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES, ALL_GENRES, normalizeGenreSelection, planGenreSlots };
 
@@ -229,6 +230,7 @@ export function getPool(generatorId, slotKey, customKeywords = []) {
       withSingleWordAlias(kw, generatorId, slotKey, i)),
     ...(REFORGE_LIBRARY[generatorId]?.[slotKey] || [])
     ,...(QUALITY30_LIBRARY[generatorId]?.[slotKey] || [])
+    ,...(QUALITY11_LIBRARY[generatorId]?.[slotKey] || [])
   ];
   for (const item of customKeywords) {
     if (item.generator === generatorId && item.slot === slotKey) {
