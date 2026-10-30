@@ -171,7 +171,7 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     });
     const first = start();
     expect(document.querySelector('.quick-setup-review').textContent).toContain('로맨스');
-    expect(document.querySelector('.quick-setup-review').textContent).toContain('구체적');
+    expect(document.querySelector('.quick-setup-review').textContent).toContain('구체설정');
     expect(document.querySelector('.quick-advanced-summary').textContent).toContain('밴 2개');
     expect(document.querySelector('#dnaNovelty')).toBeNull();
     expandAdvanced();
