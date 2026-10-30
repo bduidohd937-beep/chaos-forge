@@ -561,7 +561,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   });
   const downloadFullBackup = () => {
     // Capture the LIVE draft, not a possibly stale last-written autosave.
-    const backup = Storage.createFullBackup(snapshotDraft());
+    const backup = Storage.createFullBackup({ ...snapshotDraft(), sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
     return downloadFile(buildFilename('v2-workspace-backup', 'json'),
       JSON.stringify(backup, null, 2), 'application/json;charset=utf-8');
   };
