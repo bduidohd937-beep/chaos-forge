@@ -94,11 +94,11 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     start(); go('SETUP');
     fireEvent.change(document.querySelector('#genreSelect'), { target: { value: '미' } });
     click(screen.getByRole('radio', { name: '장르 맞춤' }));
-    click(screen.getByRole('button', { name: /간결.*소재 중심/ }));
+    click(screen.getByRole('button', { name: /키워드.*한 단어/ }));
     const summary = document.querySelector('.quick-setup-review').textContent;
     expect(summary).toContain('미스터리');
     expect(summary).toContain('장르 맞춤');
-    expect(summary).toContain('간결');
+    expect(summary).toContain('키워드');
     click(screen.getByRole('button', { name: /이 설정으로 창조하기/ }));
     expect(document.querySelector('[data-screen]').dataset.screen).toBe('chaos');
     expect(Storage.loadDraft().creativeDNA.detail).toBe('brief');
