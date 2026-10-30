@@ -5,17 +5,25 @@ import CreativeDnaPanel from './CreativeDnaPanel.jsx';
 const FEATURED_SUBGENRES = new Set([
   '로', '미', '코', '공', 'SF', '무', '일', '스', '액션', 'RPG', '생존'
 ]);
-
-const MODE_DESCRIPTIONS = {
-  genre: '선택한 장르의 특징을 우선해서 조화로운 아이디어를 뽑아요.',
-  random: '장르 경계를 벗어나 예상하지 못한 조합을 발견해요.',
-  hybrid: '장르의 방향을 유지하면서 의외의 요소를 섞어요.'
+const MODE_HINTS = {
+  genre: '장르에 집중',
+  hybrid: '장르 + 의외성',
+  random: '제약 없이 발견'
 };
+const DETAILS = [
+  ['brief', '간결', '소재 중심 · 상상의 여지'],
+  ['balanced', '기본', '설정 한 문장'],
+  ['detailed', '구체적', '배경·갈등까지']
+];
+const detailName = (detail) => DETAILS.find(item => item[0] === detail)?.[1] || '기본';
 
 export default function SetupScreen({
   generatorId, onGeneratorChange, mainGenre, subgenres, onMainChange, onSubChange,
-  mode, onModeChange, chaos, onChaosChange, onBegin, dna, onDNAChange, keywordCoverage
+  mode, onModeChange, chaos, onChaosChange, onBegin, dna, onDNAChange, keywordCoverage,
+  initialAdvanced = false
 }) {
+  const [subOpen, setSubOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(initialAdvanced);
   const [showAllGenres, setShowAllGenres] = useState(false);
   const [genreSearch, setGenreSearch] = useState('');
   const needle = genreSearch.trim().toLocaleLowerCase();
@@ -24,162 +32,203 @@ export default function SetupScreen({
     if (needle) return item.n.toLocaleLowerCase().includes(needle);
     return showAllGenres || FEATURED_SUBGENRES.has(item.k) || subgenres.includes(item.k);
   });
-  const genreLabel = (key) => ALL_GENRES.find((item) => item.k === key)?.n ?? key;
+  const genreLabel = (key) => ALL_GENRES.find(item => item.k === key)?.n ?? key;
+  const genLabel = GENERATORS.find(item => item.id === generatorId)?.tab || 'STORY';
+  const modeLabel = MODES.find(item => item.k === mode)?.n || '하이브리드';
+  const bans = dna.bannedTopics.length + dna.bannedStyles.length + dna.bannedExact.length;
 
   return (
-    <section className="v2-screen setup-screen" aria-labelledby="setupTitle">
-      <div className="v2-intro">
-        <p className="v2-kicker">01 / SETUP — CREATIVE CONFIGURATION</p>
-        <h2 id="setupTitle">새로운 세계의 규칙을 정하세요.</h2>
-        <p>먼저 만들고 싶은 작품을 고른 뒤, 장르를 조합하세요. 복잡한 설정은 이 방에서만 다룹니다.</p>
+    <section className="v2-screen setup-screen quick-setup" aria-labelledby="setupTitle">
+      <div className="v2-intro quick-setup-intro">
+        <p className="v2-kicker">01 / SETUP — QUICK CREATE</p>
+        <h2 id="setupTitle">세 가지만 정하고, 바로 창조하세요.</h2>
+        <p>창작 유형과 장르, 생성 스타일을 선택하세요. 더 자세한 조절은 아래 고급 설정에서 할 수 있어요.</p>
       </div>
 
-      <div className="setup-columns">
-        <div className="setup-main">
-          <section className="v2-panel setup-block" aria-labelledby="generatorHeading">
-            <div className="setup-block-head">
-              <span className="setup-step">01</span>
-              <div>
-                <h3 id="generatorHeading">무엇을 창조할까요?</h3>
-                <p>생성기를 선택하면 각 작업에 맞는 슬롯이 준비돼요.</p>
-              </div>
+      <div className="quick-setup-grid">
+        <section className="v2-panel setup-block quick-setup-block" aria-labelledby="generatorHeading">
+          <div className="setup-block-head">
+            <span className="setup-step">01</span>
+            <div>
+              <h3 id="generatorHeading">무엇을 만들까요?</h3>
+              <p>창작할 작품 유형을 선택해 주세요.</p>
             </div>
-            <div className="setup-generator-grid">
-              {GENERATORS.map((gen) => (
-                <button type="button" key={gen.id}
-                  className={`setup-generator${generatorId === gen.id ? ' selected' : ''}`}
-                  aria-pressed={generatorId === gen.id}
-                  onClick={() => onGeneratorChange(gen.id)}>
-                  <span className="setup-generator-symbol" aria-hidden="true">
-                    {gen.id === 'story' ? '✧' : gen.id === 'game' ? '◈' : gen.id === 'character' ? '◇' : '⚔'}
-                  </span>
-                  <strong>{gen.tab}</strong>
-                  <small>{gen.desc}</small>
-                </button>
-              ))}
-            </div>
-          </section>
+          </div>
+          <div className="setup-generator-grid">
+            {GENERATORS.map(gen => (
+              <button type="button" key={gen.id}
+                className={`setup-generator${generatorId === gen.id ? ' selected' : ''}`}
+                aria-pressed={generatorId === gen.id}
+                onClick={() => onGeneratorChange(gen.id)}>
+                <span className="setup-generator-symbol" aria-hidden="true">
+                  {gen.id === 'story' ? '✧' : gen.id === 'game' ? '◈' : gen.id === 'character' ? '◇' : '⚔'}
+                </span>
+                <strong>{gen.tab}</strong>
+                <small>{gen.desc}</small>
+              </button>
+            ))}
+          </div>
+        </section>
 
-          <section className="v2-panel setup-block" aria-labelledby="genreHeading">
-            <div className="setup-block-head">
-              <span className="setup-step">02</span>
-              <div>
-                <h3 id="genreHeading">장르를 조합하세요.</h3>
-                <p>메인은 이야기의 중심. 서브는 분위기와 사건에 예상 밖의 색을 더해요.</p>
-              </div>
+        <section className="v2-panel setup-block quick-setup-block" aria-labelledby="genreHeading">
+          <div className="setup-block-head">
+            <span className="setup-step">02</span>
+            <div>
+              <h3 id="genreHeading">어떤 장르인가요?</h3>
+              <p>메인 장르 하나만 골라도 시작할 수 있어요.</p>
             </div>
-
-            <div className="setup-primary">
-              <label htmlFor="genreSelect">메인 장르 <span className="required-mark">필수 · 1개</span></label>
-              <select className="input" id="genreSelect" value={mainGenre}
-                onChange={(e) => onMainChange(e.target.value)}>
-                {ALL_GENRES.map((gen) => <option key={gen.k} value={gen.k}>{gen.n}</option>)}
-              </select>
-            </div>
-
+          </div>
+          <div className="setup-primary">
+            <label htmlFor="genreSelect">메인 장르 <span className="required-mark">필수 · 1개</span></label>
+            <select className="input" id="genreSelect" value={mainGenre}
+              onChange={event => onMainChange(event.target.value)}>
+              {ALL_GENRES.map(item => <option key={item.k} value={item.k}>{item.n}</option>)}
+            </select>
+          </div>
+          <div className="quick-sub-summary">
             <div className="setup-sub-heading">
               <strong>서브 장르 <small className="setup-optional">(선택)</small></strong>
-              <span aria-live="polite">{subgenres.length} / 3 선택</span>
+              <span aria-live="polite">{subgenres.length} / 3</span>
             </div>
-            <div className="setup-genre-picker">
-              <label htmlFor="subGenreSearch" className="setup-search-label">원하는 장르 검색</label>
+            <div className="quick-sub-tags" aria-live="polite">
+              {subgenres.length ? subgenres.map(key => (
+                <button type="button" className="quick-sub-tag" key={key}
+                  aria-label={`${genreLabel(key)} 서브 장르 제거`}
+                  onClick={() => onSubChange(key)}>
+                  {genreLabel(key)} <span aria-hidden="true">×</span>
+                </button>
+              )) : <span className="quick-sub-empty">추가하지 않아도 돼요.</span>}
+            </div>
+            <button type="button" className="quick-sub-toggle"
+              aria-expanded={subOpen} aria-controls="quickSubPicker"
+              onClick={() => setSubOpen(value => !value)}>
+              {subOpen ? '서브 장르 닫기' : '+ 서브 장르 선택'}
+              <span aria-hidden="true">{subOpen ? '▴' : '▾'}</span>
+            </button>
+          </div>
+          {subOpen && (
+            <div className="setup-genre-picker quick-sub-picker" id="quickSubPicker">
+              <label htmlFor="subGenreSearch" className="setup-search-label">장르 검색</label>
               <div className="setup-search-row">
-                <input
-                  id="subGenreSearch"
-                  className="input setup-genre-search"
-                  type="search"
-                  value={genreSearch}
-                  onChange={(event) => setGenreSearch(event.target.value)}
-                  placeholder="장르 이름 검색 (예: SF, 로맨스)"
-                />
+                <input id="subGenreSearch" className="input setup-genre-search" type="search"
+                  value={genreSearch} onChange={event => setGenreSearch(event.target.value)}
+                  placeholder="예: SF, 로맨스" />
                 <button type="button" className="setup-expand-btn"
                   aria-expanded={showAllGenres}
-                  onClick={() => setShowAllGenres((prev) => !prev)}>
+                  onClick={() => setShowAllGenres(prev => !prev)}>
                   {showAllGenres ? '추천만 보기' : '전체 장르 보기'}
                   <span aria-hidden="true">{showAllGenres ? ' ▴' : ' ▾'}</span>
                 </button>
               </div>
-              <div className="setup-picked" aria-live="polite">
-                {subgenres.length ? (
-                  <>
-                    <span>선택한 서브</span>
-                    {subgenres.map((key) => (
-                      <span key={key} className="setup-picked-tag">{genreLabel(key)}</span>
-                    ))}
-                  </>
-                ) : <span>아직 서브 장르가 없어요. 최대 3개까지 선택 가능해요.</span>}
-              </div>
               <div className="v2-genre-grid" role="group" aria-label="서브 장르 선택">
-                {filteredSubgenres.map((g) => {
-                  const selected = subgenres.includes(g.k);
+                {filteredSubgenres.map(item => {
+                  const selected = subgenres.includes(item.k);
                   return (
-                    <button key={g.k} type="button" className={`genre-tile${selected ? ' selected' : ''}`}
+                    <button key={item.k} type="button"
+                      className={`genre-tile${selected ? ' selected' : ''}`}
                       aria-pressed={selected}
                       disabled={!selected && subgenres.length >= 3}
-                      onClick={() => onSubChange(g.k)}>
-                      {selected ? '✓ ' : '+ '}{g.n}
+                      onClick={() => onSubChange(item.k)}>
+                      {selected ? '✓ ' : '+ '}{item.n}
                     </button>
                   );
                 })}
-                {filteredSubgenres.length === 0 &&
+                {!filteredSubgenres.length &&
                   <p className="setup-genre-empty">해당하는 장르가 없어요. 다른 이름으로 검색해 보세요.</p>}
               </div>
+              <p className="setup-tip">최대 3개까지 자유롭게 조합할 수 있어요.</p>
             </div>
-            <p className="setup-tip">처음엔 추천 장르만 보여요. 전체 장르를 열거나 검색하면 자유롭게 조합할 수 있어요.</p>
-          </section>
-        </div>
+          )}
+        </section>
+      </div>
 
-        <aside className="setup-side">
-          <section className="v2-panel setup-block" aria-labelledby="randomHeading">
-            <div className="setup-block-head">
-              <span className="setup-step">03</span>
-              <div><h3 id="randomHeading">어떻게 섞을까요?</h3><p>키워드의 자유도를 선택하세요.</p></div>
-            </div>
+      <section className="v2-panel quick-style" aria-labelledby="quickStyleHeading">
+        <div className="setup-block-head">
+          <span className="setup-step">03</span>
+          <div>
+            <h3 id="quickStyleHeading">어떤 느낌으로 만들까요?</h3>
+            <p>추첨 방식과 문장의 길이만 고르면 준비 끝!</p>
+          </div>
+        </div>
+        <div className="quick-style-controls">
+          <fieldset className="quick-style-fieldset">
+            <legend>조합 방식</legend>
             <div className="setup-mode-list" role="radiogroup" aria-label="랜덤 모드">
-              {MODES.map((item) => (
-                <button type="button" role="radio" key={item.k}
+              {MODES.map(item => (
+                <button type="button" key={item.k} role="radio"
                   className={`setup-mode${mode === item.k ? ' selected' : ''}`}
                   aria-label={item.n} aria-checked={mode === item.k}
                   onClick={() => onModeChange(item.k)}>
-                  <span aria-hidden="true">{mode === item.k ? '◉' : '○'}</span>
+                  <span className="quick-radio" aria-hidden="true">{mode === item.k ? '◉' : '○'}</span>
                   <span className="setup-mode-copy">
                     <strong>{item.n}</strong>
-                    <small>{MODE_DESCRIPTIONS[item.k]}</small>
+                    <small>{MODE_HINTS[item.k]}</small>
                   </span>
                 </button>
               ))}
             </div>
-            <div className={`setup-chaos${mode !== "hybrid" ? " is-disabled" : ""}`} id="chaosControl">
+          </fieldset>
+          <fieldset className="quick-style-fieldset">
+            <legend>표현의 구체성</legend>
+            <div className="dna-option-row quick-detail-choices" role="group" aria-label="표현 길이">
+              {DETAILS.map(([id, label, hint]) => (
+                <button type="button" key={id}
+                  className={`dna-choice${dna.detail === id ? ' selected' : ''}`}
+                  aria-pressed={dna.detail === id}
+                  onClick={() => onDNAChange({ ...dna, detail: id })}>
+                  <strong>{label}</strong>
+                  <small>{hint}</small>
+                </button>
+              ))}
+            </div>
+            <p className="dna-hint">3단계 표현이 있는 키워드는 문장이 달라지고, 기존 키워드는 원문이 유지될 수 있어요.</p>
+          </fieldset>
+        </div>
+      </section>
+
+      <section className="quick-setup-launch" aria-label="현재 선택 및 생성 시작">
+        <div className="quick-setup-review">
+          <p className="v2-kicker">READY TO CREATE</p>
+          <strong>{genLabel} · {genreLabel(mainGenre)}{subgenres.length ? ` + ${subgenres.map(genreLabel).join(' + ')}` : ''}</strong>
+          <span>{modeLabel} · {detailName(dna.detail)} 표현{mode === 'hybrid' ? ` · 혼돈 ${chaos}/5` : ''}{bans ? ` · 밴 ${bans}개` : ''}</span>
+          <small>기존 결과는 유지되고 새 추첨부터 현재 설정이 적용돼요.</small>
+        </div>
+        <button type="button" className="btn btn-primary setup-start quick-launch-button"
+          onClick={onBegin}>◈ 이 설정으로 창조하기 →</button>
+      </section>
+
+      <section className="quick-advanced" aria-labelledby="advancedSetupHeading">
+        <button type="button" className="quick-advanced-toggle"
+          aria-expanded={advancedOpen} aria-controls="advancedSetupContent"
+          onClick={() => setAdvancedOpen(open => !open)}>
+          <span className="quick-advanced-icon" aria-hidden="true">⚙</span>
+          <span className="quick-advanced-label">
+            <strong id="advancedSetupHeading">고급 설정</strong>
+            <small>혼돈 · 독창성 · 선호 분위기 · 소재 차단</small>
+          </span>
+          <span className="quick-advanced-summary">
+            독창성 {dna.novelty}/4 · 밴 {bans}개
+          </span>
+          <span className="quick-advanced-chevron" aria-hidden="true">{advancedOpen ? '▴' : '▾'}</span>
+        </button>
+        {advancedOpen && (
+          <div id="advancedSetupContent" className="quick-advanced-content">
+            <section className={`setup-chaos${mode !== 'hybrid' ? ' is-disabled' : ''}`}
+              id="chaosControl" aria-label="혼돈 강도">
               <div className="setup-sub-heading">
                 <label htmlFor="chaosRange">혼돈 레벨</label>
                 <strong id="chaosValue">{chaos}<span className="dim"> / 5</span></strong>
               </div>
               <input type="range" id="chaosRange" min="1" max="5" step="1"
                 disabled={mode !== 'hybrid'} value={chaos}
-                onChange={(e) => onChaosChange(Number(e.target.value))} />
+                onChange={event => onChaosChange(Number(event.target.value))} />
               <div className="chaos-scale"><span>정석</span><span>혼합</span><span>붕괴</span></div>
-            </div>
-          </section>
-
-          <section className="v2-panel setup-summary" aria-label="현재 장르 조합">
-            <span className="v2-kicker">READY TO CREATE · 현재 설정</span>
-            <h3>{genreLabel(mainGenre)}</h3>
-            <div className="v2-tags">
-              {subgenres.map((key) => (
-                <span className="v2-tag" key={key}>+ {genreLabel(key)}</span>
-              ))}
-              {!subgenres.length && <span className="setup-empty-sub">서브 장르 없음 · 정통 장르</span>}
-            </div>
-            <p className="setup-summary-caption">설정이 마음에 든다면 생성실로 이동해서 키워드를 추첨해 보세요.</p>
-            <button type="button" className="btn btn-primary btn-block setup-start"
-              onClick={onBegin}>◈ 이 설정으로 창조하기 →</button>
-            <span className="setup-footnote">기존 결과는 보존되고, 다음 추첨에 새 설정이 적용됩니다.</span>
-          </section>
-        </aside>
-      </div>
-      <div className="setup-dna-stage">
-        <CreativeDnaPanel dna={dna} onChange={onDNAChange} coverage={keywordCoverage}/>
-      </div>
+              <p className="dna-hint">혼돈은 서로 다른 장르 요소를 섞는 정도예요. 독창성과는 별개예요.</p>
+            </section>
+            <CreativeDnaPanel dna={dna} onChange={onDNAChange} coverage={keywordCoverage} />
+          </div>
+        )}
+      </section>
     </section>
   );
 }
