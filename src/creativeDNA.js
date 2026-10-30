@@ -6,7 +6,7 @@
  */
 export const TOPICS = [
   { id: 'reincarnation', label: '환생·전생', aliases: ['환생','전생','다른 생에 태어','새 생으로 태어','다시 태어','이세계 전생'] },
-  { id: 'regression', label: '회귀·시간 반복', aliases: ['회귀','타임 루프','타임루프','시간 역행','시간을 되감','하루를 반복','같은 하루를 반복','과거로 돌아','시간을 거슬러','시간 되돌리'] },
+  { id: 'regression', label: '회귀·시간 반복', aliases: ['회귀','타임 루프','타임루프','시간 역행','시간을 되감','하루를 반복','같은 하루를 반복','과거로 돌아','시간을 거슬러','시간이 역행','시간 되돌리'] },
   { id: 'undead', label: '좀비·언데드', aliases: ['좀비','언데드','살아난 시체','되살아난 시체','죽은 시체가','사령술','네크로맨서','망자','시체 군단'] },
   { id: 'academy', label: '학원·학교', aliases: ['학교','학원','캠퍼스','동아리','교실','학생회','입학','졸업'] },
   { id: 'tragedy', label: '비극·희생', aliases: ['비극','비참','희생','파멸','절망','죽음을 맞','모두가 죽','새드엔딩','새드 엔딩'] },
@@ -64,10 +64,10 @@ export function renderedText(keyword,dna) {
   if(!keyword?.forms) return String(keyword?.t||'');
   return String(keyword.forms[d.detail] || keyword.forms.balanced || keyword.t || '');
 }
-function styleTags(keyword) {
+function styleTags(keyword,dna) {
   const tags = Array.isArray(keyword?.styles)?keyword.styles.filter(x=>styleIds.has(x)):[];
-  const text=renderedText(keyword, {detail:'detailed'});
-  if(text.length>75) tags.push('long');
+  const text=renderedText(keyword,dna);
+  if(text.length>45) tags.push('long');
   if(text.length<=11) tags.push('short');
   if(deriveTopics(keyword).some(t=>t==='tragedy'||t==='horror'))tags.push('dark');
   if(deriveTopics(keyword).includes('comedy'))tags.push('comic');
@@ -83,7 +83,7 @@ export function isBanned(keyword,dna) {
   const d=normalizeDNA(dna);
   if(isExactBanned(keyword,d))return true;
   if(deriveTopics(keyword).some(t=>d.bannedTopics.includes(t)))return true;
-  if(styleTags(keyword).some(t=>d.bannedStyles.includes(t)))return true;
+  if(styleTags(keyword,d).some(t=>d.bannedStyles.includes(t)))return true;
   return false;
 }
 /** Hard ban filters strictly; soft ban applies penalty at scoring only. */
