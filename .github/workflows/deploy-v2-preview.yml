@@ -3,7 +3,7 @@ name: Deploy CHAOS FORGE (V1 + V2 Preview)
 on:
   push:
     branches: [main]
-  workflow_dispatch
+  workflow_dispatch:
 
 permissions:
   contents: read
