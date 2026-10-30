@@ -112,11 +112,11 @@ const Storage = {
   /**
    * On a crash halfway through an import, rollback the four independent
    * collections BEFORE App reads or auto-saves a partially restored draft.
-   * Return: 'clean', 'recovered', or 'failed'.
+   * Return: 'clean', 'recovered', 'unavailable', or 'failed'.
    */
   recoverInterruptedRestore() {
     const store = rawStorage();
-    if (!store) return 'failed';
+    if (!store) return 'unavailable';
     let record;
     try {
       const raw = store.getItem(RESTORE_JOURNAL_KEY);
