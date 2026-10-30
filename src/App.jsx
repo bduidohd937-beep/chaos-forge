@@ -19,6 +19,7 @@ import IdeasPanel from './components/IdeasPanel.jsx';
 import CustomPanel from './components/CustomPanel.jsx';
 import ConceptPreview from './components/ConceptPreview.jsx';
 import { buildConceptPreview } from './synthesis.js';
+import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
 
 const CHAOS_HINTS = {
   1: '장르 키워드만 골라 닮은 느낌을 유지합니다.',
@@ -460,6 +461,36 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     }));
   };
 
+  const updateForgeField = (fieldId, text) => {
+    if (!getForgeFields(generatorId).some((field) => field.id === fieldId)) return;
+    setForgeDocs((prev) => {
+      const doc = normalizeForgeDoc(generatorId, prev[generatorId]);
+      return {
+        ...prev,
+        [generatorId]: {
+          ...doc,
+          fields: { ...doc.fields, [fieldId]: text.slice(0, 12000) }
+        }
+      };
+    });
+  };
+
+  /** Append an explicitly requested source snippet; never replace written prose. */
+  const importForgeField = (fieldId, snippet) => {
+    if (!getForgeFields(generatorId).some((field) => field.id === fieldId)) return;
+    const input = typeof snippet === 'string' ? snippet.trim() : '';
+    if (!input) return;
+    const doc = normalizeForgeDoc(generatorId, forgeDocs[generatorId]);
+    const previous = doc.fields[fieldId] || '';
+    if (previous.includes(input)) {
+      showToast('이미 이 키워드를 가져왔습니다');
+      return;
+    }
+    const combined = [previous.trimEnd(), input].filter(Boolean).join('\n');
+    updateForgeField(fieldId, combined);
+    showToast('기존 문장을 유지하고 키워드를 추가했습니다');
+  };
+
   /** 폭주: 선택한 장르는 유지, 하이브리드 혼돈 5로 잠금 항목을 제외하고 재추첨. */
   const overdrive = () => {
     if (lockedCount === gen.slots.length) {
@@ -509,6 +540,21 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   const copy = () => copyText(buildText(), '결과');
   const copyConcept = () => copyText(preview.text, '콘셉트');
+
+  const buildForgeDocument = () =>
+    buildForgeExportData(generatorId, forgeDocs[generatorId], current.values);
+  const copyForgeDocument = () => copyText(buildForgeMarkdown(buildForgeDocument()), '기획서');
+  const exportForgeDocument = (format) => {
+    const data = buildForgeDocument();
+    const isJson = format === 'json';
+    const ok = downloadFile(
+      buildFilename('forge-' + generatorId, isJson ? 'json' : 'md'),
+      isJson ? JSON.stringify(data, null, 2) : buildForgeMarkdown(data),
+      isJson ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+    );
+    showToast(ok ? 'FORGE 기획서를 내보냈습니다' : '파일 저장을 지원하지 않는 브라우저입니다');
+    return ok;
+  };
 
   /** 결과를 마크다운/JSON 파일로 내려받는다 */
   const exportResult = (format) => {
@@ -810,9 +856,13 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         )}
 
         {workspacePage === 'forge' && (
-          <ForgeWorkspace generator={gen} values={current.values} preview={preview}
+          <ForgeWorkspace key={generatorId}
+            generator={gen} values={current.values} preview={preview}
             isRolling={isRolling} lockedCount={lockedCount} doc={forgeDocs[generatorId] || {}}
-            onUpdate={updateForgeDoc} onCopy={copyConcept}
+            onUpdate={updateForgeDoc} onUpdateField={updateForgeField}
+            onImportField={importForgeField}
+            onExport={exportForgeDocument} onCopyDocument={copyForgeDocument}
+            onCopy={copyConcept} saved={draftSaved}
             onBack={() => setWorkspacePage('chaos')} />
         )}
 
