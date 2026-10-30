@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import ConceptPreview from './ConceptPreview.jsx';
 import {
-  getForgeTemplate, forgeProgress, forgeSourceLines, normalizeForgeDoc
+  getForgeTemplate, forgeSourceLines, normalizeForgeDoc
 } from '../forgeSchema.js';
 
 /**
@@ -31,7 +31,6 @@ export default function ForgeWorkspace({
   const template = getForgeTemplate(generator.id);
   const normalized = normalizeForgeDoc(generator.id, doc);
   const coreSection = template.sections[0];
-  const progress = forgeProgress(generator.id, normalized);
   const sectionFilled = (section) =>
     section.fields.filter((field) => normalized.fields[field.id].trim()).length;
 
@@ -54,6 +53,7 @@ export default function ForgeWorkspace({
   const visibleSections = simpleMode ? [coreSection] : template.sections;
   const visibleFields = simpleMode ? coreSection.fields : selected.fields;
   const nextSection = template.sections[selectedIndex + 1];
+  const finishedStages = template.sections.filter(section => sectionFilled(section) === section.fields.length).length;
 
   const openStage = (index) => {
     const destination = template.sections[index];
@@ -116,6 +116,9 @@ export default function ForgeWorkspace({
           <p className="forge-outline-help">{simpleMode
             ? '먼저 핵심 3개만 적어 보세요. 모든 내용은 계속 보관돼요.'
             : '4단계 중 하나를 선택하세요. 한 번에 한 단계씩 편집하며, 작성한 내용은 그대로 유지돼요.'}</p>
+          {!simpleMode && (
+            <p className="forge-outline-progress" aria-live="polite">✓ 전체 {finishedStages} / {template.sections.length}단계 작성 완료</p>
+          )}
           <nav className="forge-outline-nav" aria-label="편집 섹션">
             {visibleSections.map((section, index) => {
               const done = sectionFilled(section);
@@ -128,7 +131,7 @@ export default function ForgeWorkspace({
                   <span className="forge-outline-index">{String(index + 1).padStart(2,'0')}</span>
                   <span className="forge-outline-name">
                     <strong>{section.title}</strong>
-                    <small>{done} / {section.fields.length} 작성</small>
+                    <small>{done === section.fields.length ? '✓ 단계 완료' : done ? `작성 중 · ${done} / ${section.fields.length}` : '시작 전'}</small>
                   </span>
                   <span className="forge-outline-mark" aria-hidden="true">{done === section.fields.length ? '✓' : '›'}</span>
                 </button>
