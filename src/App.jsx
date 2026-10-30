@@ -7,6 +7,7 @@ import {
   generateResult,
   rerollSlot,
   getPool,
+  auditDNACoverage,
   normalizeGenreSelection,
   ALL_GENRES
 } from './engine.js';
@@ -20,6 +21,10 @@ import CustomPanel from './components/CustomPanel.jsx';
 import ConceptPreview from './components/ConceptPreview.jsx';
 import { buildConceptPreview } from './synthesis.js';
 import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
+import {
+  normalizeDNA, banExact, toggleLike, deriveTopics,
+  auditKeywordPools
+} from './creativeDNA.js';
 
 const CHAOS_HINTS = {
   1: '장르 키워드만 골라 닮은 느낌을 유지합니다.',
@@ -150,6 +155,13 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     () => draft?.forgeDocs && typeof draft.forgeDocs === 'object'
       && !Array.isArray(draft.forgeDocs) ? draft.forgeDocs : {}
   );
+  const [dna, setDNA] = useState(() => normalizeDNA(draft?.creativeDNA));
+  const [mutationMessage, setMutationMessage] = useState('');
+  const keywordCoverage = useMemo(
+    () => auditKeywordPools(GENERATORS, (gid,key)=>getPool(gid,key,custom))
+      .find(report=>report.generator===generatorId),
+    [generatorId,custom]
+  );
   const [chaos, setChaos] = useState(() => {
     const value = Number(draft?.chaos);
     return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
@@ -186,9 +198,9 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
-    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, recentHistory: recentHistoryRef.current });
+    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs]);
+  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -232,25 +244,59 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       const nextGenre = normalizeGenreSelection(gid, { main: overrides.genre ?? genre, subs: overrides.subgenres ?? subgenres }).main;
       const nextSubs = normalizeGenreSelection(gid, { main: nextGenre, subs: overrides.subgenres ?? subgenres }).subs;
       const nextChaos = overrides.chaos ?? chaos;
+      const baseDNA = normalizeDNA(overrides.dna || dna);
+      const mutation = options.mutation || baseDNA.mutation;
+      const drawDNA = mutation === 'rift'
+        ? {...baseDNA, mutation:'rift', novelty:Math.max(3,baseDNA.novelty)}
+        : {...baseDNA, mutation:'spark'};
       const target = GENERATOR_MAP[gid];
       const snapshot = results[gid] ?? { values: {}, locks: {} };
+      const open = target.slots.filter((slot)=>!snapshot.locks[slot.key]);
       if (target.slots.every((slot) => snapshot.locks[slot.key])) {
         showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
         return;
       }
-
+      // Signature mutation: ECHO temporarily preserves one meaningful card
+      // without changing any of the user's persistent lock switches.
+      const echoPreferences = {
+        story:['protagonist','setting','conflict'],
+        game:['mechanic','gameplay','special'],
+        character:['desire','past','personality'],
+        hero:['class','active','weapon']
+      };
+      const preserved = mutation === 'echo' && open.length > 1
+        ? (echoPreferences[gid] || []).map(key=>open.find(slot=>slot.key===key && snapshot.values[key])).find(Boolean) ||
+          open.find(slot=>snapshot.values[slot.key])
+        : null;
+      const drawLocks = preserved
+        ? {...snapshot.locks,[preserved.key]:true}
+        : snapshot.locks;
+      const shortage = auditDNACoverage(gid,drawDNA,custom,drawLocks,snapshot.values);
+      if (shortage.empty.length) {
+        showToast('BAN 설정으로 후보가 없는 항목: '+shortage.empty.slice(0,3).join(' · ')+'. 설정에서 밴을 줄여 주세요.');
+        return;
+      }
+      if (shortage.blockedLocked.length) {
+        setMutationMessage('잠긴 카드에 차단된 소재가 있어요: '+shortage.blockedLocked.join(' · '));
+      } else {
+        setMutationMessage(preserved
+          ? `ECHO · ${preserved.label}을 한 번 계승하고 나머지를 변형했어요.`
+          : mutation==='rift'?'RIFT · 파격적인 차이를 우선해 추첨했어요.':'');
+      }
       const finalValues = generateResult(gid, {
         mode: nextMode,
         genre: nextGenre,
         genres: { main: nextGenre, subs: nextSubs },
         chaos: nextChaos,
         custom,
-        locks: snapshot.locks,
+        dna: drawDNA,
+        locks: drawLocks,
         values: snapshot.values,
-        recent: recentHistoryRef.current[gid] || {}
+        recent: recentHistoryRef.current[gid] || {},
+        previousTopics: Object.values(snapshot.values).flatMap(text=>deriveTopics({t:text}))
       });
       recentHistoryRef.current = nextRecentHistory(
-        recentHistoryRef.current, gid, snapshot.values, finalValues, snapshot.locks, target.slots
+        recentHistoryRef.current, gid, snapshot.values, finalValues, drawLocks, target.slots
       );
 
       // 연출과 무관하게 데이터는 즉시 확정 (연출 중 저장/복사 대비)
@@ -258,7 +304,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       clearAnimations();
 
       const unlocked = target.slots
-        .filter((slot) => !snapshot.locks[slot.key])
+        .filter((slot) => !drawLocks[slot.key])
         .map((slot) => slot.key);
 
       const isSlot = reelStyle === 'slot' || options.overdrive === true;
@@ -330,7 +376,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         showToast(completion);
       }
     },
-    [generatorId, mode, genre, subgenres, chaos, results, custom, reelStyle, animationMs, clearAnimations, showToast]
+    [generatorId, mode, genre, subgenres, chaos, results, custom, dna, reelStyle, animationMs, clearAnimations, showToast]
   );
 
   const reroll = (slotKey) => {
@@ -338,9 +384,15 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       showToast('잠긴 항목은 재추첨되지 않습니다');
       return;
     }
+    const available = auditDNACoverage(generatorId,dna,custom,current.locks,current.values);
+    if (available.empty.length && available.empty.includes(gen.slots.find(s=>s.key===slotKey)?.label)) {
+      showToast('차단 규칙 때문에 이 슬롯에 선택 가능한 키워드가 없어요.');
+      return;
+    }
     const text = rerollSlot(generatorId, slotKey, {
       mode, genre, genres: { main: genre, subs: subgenres },
-      chaos, custom, previous: current.values[slotKey],
+      chaos, custom, dna, previous: current.values[slotKey],
+      previousTopics: Object.values(current.values).flatMap(t=>deriveTopics({t})),
       recent: recentHistoryRef.current[generatorId]?.[slotKey] || []
     });
     recentHistoryRef.current = nextRecentHistory(
@@ -450,6 +502,21 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       : prev.length < 3 ? [...prev, value] : prev);
   };
   const changeMode = (value) => setMode(value);
+  const updateDNA = (next) => setDNA(normalizeDNA(next));
+  const quickBan = (value) => {
+    const text=String(value||'').trim();
+    if (!text) return;
+    const banned=dna.bannedExact.some(v=>v.toLocaleLowerCase()===text.toLocaleLowerCase());
+    setDNA(prev=>banned
+      ? {...prev,bannedExact:prev.bannedExact.filter(v=>v.toLocaleLowerCase()!==text.toLocaleLowerCase())}
+      : banExact(prev,text));
+    showToast(banned?'문구 차단을 해제했습니다':'문구를 밴 목록에 추가했습니다 · 다음 추첨에 적용돼요');
+  };
+  const quickLike = (value) => {
+    if(!String(value||'').trim())return;
+    setDNA(prev=>toggleLike(prev,value));
+    showToast('취향 가중치를 갱신했습니다');
+  };
   const beginCreation = () => {
     setWorkspacePage('chaos');
     generate();
@@ -726,6 +793,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             onModeChange={changeMode}
             chaos={chaos}
             onChaosChange={setChaos}
+            dna={dna} onDNAChange={updateDNA} keywordCoverage={keywordCoverage}
             onBegin={beginCreation}
           />
         )}
@@ -762,7 +830,30 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               ))}
               <span className="chaos-meta">· {modeName(mode)}{mode === 'hybrid' ? ` · 혼돈 ${chaos}/5` : ''}</span>
             </div>
+            <div className="dna-active-summary">
+              <span>CREATIVE DNA</span>
+              <strong>{dna.detail==='brief'?'간결':dna.detail==='detailed'?'구체적':'기본'} 표현 · 독창성 {dna.novelty}/4</strong>
+              <span>⛔ 차단 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
+              <button type="button" className="btn btn-outline" onClick={()=>setWorkspacePage('setup')}>취향·밴 편집</button>
+            </div>
 
+            <div className="mutation-deck" aria-label="CHAOS FORGE 변이 방식">
+              <div>
+                <strong>✦ CREATIVE DNA · 변이 방식</strong>
+                <p>SPARK 새 발상 / ECHO 핵심 한 조각 계승 / RIFT 과감한 변형</p>
+              </div>
+              <div className="mutation-controls" role="group" aria-label="변이 모드 선택">
+                {[
+                  ['spark','SPARK'],
+                  ['echo','ECHO'],
+                  ['rift','RIFT']
+                ].map(([id,label])=>(
+                  <button type="button" key={id} className={`mutation-btn${dna.mutation===id?' selected':''}`}
+                    aria-pressed={dna.mutation===id} onClick={()=>updateDNA({...dna,mutation:id})}>{label}</button>
+                ))}
+              </div>
+            </div>
+            {mutationMessage && <p className="mutation-result" role="status">{mutationMessage}</p>}
             <div className="chaos-control-deck">
               <div className="chaos-deck-main">
                 <div className="chaos-deck-heading">
@@ -823,6 +914,10 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                     onChange={(text) => updateValue(slot.key, text)}
                     onLock={() => toggleLock(slot.key)}
                     onReroll={() => reroll(slot.key)}
+                    onBan={() => quickBan(current.values[slot.key])}
+                    onLike={() => quickLike(current.values[slot.key])}
+                    isLiked={dna.likes.includes(current.values[slot.key])}
+                    isBanned={dna.bannedExact.includes(current.values[slot.key])}
                   />
                 );
               })}
