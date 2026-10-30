@@ -1288,7 +1288,17 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             generator={gen} values={current.values} preview={preview}
             isRolling={isRolling} lockedCount={lockedCount} doc={forgeDocs[generatorId] || {}}
             onUpdate={updateForgeDoc} onUpdateField={updateForgeField}
-            onGenerateSeed={() => setForgeDocs((prev) => ({ ...prev, game: mergeGameDesignSeed(prev.game, current.values) }))}
+            onGenerateSeed={() => setForgeDocs((prev) => {
+              const before = prev.game;
+              const next = mergeGameDesignSeed(before, current.values);
+              const status = next.seedStatus || { changed: 0, preserved: 0 };
+              showToast(status.changed
+                ? `게임 설계 초안 ${status.changed}개 항목을 갱신했어요${status.preserved ? ` · 직접 작성한 ${status.preserved}개 항목은 보존` : ''}`
+                : status.preserved
+                  ? `직접 작성한 ${status.preserved}개 항목을 보존했어요`
+                  : '현재 CHAOS 결과에서 초안을 만들 수 없어요');
+              return { ...prev, game: next };
+            })}
             onImportField={importForgeField}
             onExport={exportForgeDocument} onCopyDocument={copyForgeDocument}
             onCopy={copyConcept} saved={draftSaved}

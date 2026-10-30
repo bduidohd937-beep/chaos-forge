@@ -26,6 +26,19 @@ export function buildGameDesignSeed(values = {}) {
 export function mergeGameDesignSeed(doc, values) {
   const seed = buildGameDesignSeed(values);
   const fields = { ...(doc?.fields || {}) };
-  for (const [key, value] of Object.entries(seed)) if (!text(fields[key])) fields[key] = value;
-  return { ...(doc || {}), fields };
+  const generatedFields = { ...(doc?.generatedFields || {}) };
+  let changed = 0;
+  let preserved = 0;
+  for (const [key, value] of Object.entries(seed)) {
+    const current = text(fields[key]);
+    const legacyGenerated = /^(플레이|메커니즘|특수|적|승리|아트)\s*:/u.test(current);
+    if (!current || generatedFields[key] === true || legacyGenerated) {
+      if (current !== value) changed += 1;
+      fields[key] = value;
+      generatedFields[key] = true;
+    } else {
+      preserved += 1;
+    }
+  }
+  return { ...(doc || {}), fields, generatedFields, seedStatus: { changed, preserved } };
 }
