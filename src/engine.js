@@ -24,6 +24,7 @@ import { allowedKeywords, dnaWeight, renderedText, normalizeDNA, isExactBanned, 
 import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
 import { planGenreSlots } from './composition.js';
 import { preferFreshKeywords } from './quality.js';
+import { REFORGE_LIBRARY, isReforgeReady, withSingleWordAlias } from './data/reforge29Library.js';
 
 export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES, ALL_GENRES, normalizeGenreSelection, planGenreSlots };
 
@@ -223,14 +224,26 @@ export function getPool(generatorId, slotKey, customKeywords = []) {
   const base = [
     ...(gen.data[slotKey] || []),
     ...(ALPHA3_KEYWORDS[generatorId]?.[slotKey] || []),
-    ...(ALPHA5_LIBRARY[generatorId]?.[slotKey] || [])
+    ...(ALPHA5_LIBRARY[generatorId]?.[slotKey] || []).map((kw, i) =>
+      withSingleWordAlias(kw, generatorId, slotKey, i)),
+    ...(REFORGE_LIBRARY[generatorId]?.[slotKey] || [])
   ];
   for (const item of customKeywords) {
     if (item.generator === generatorId && item.slot === slotKey) {
-      base.push(K(item.text, item.genres || [], item.genres || [], item.weight || 1));
+      base.push({ ...K(item.text, item.genres || [], item.genres || [], item.weight || 1), origin: 'user-custom' });
     }
   }
   return base;
+}
+
+/** V2.9 display-depth pool: never show unreviewed legacy paragraphs as one-word keywords.
+ * User-authored custom phrases remain selectable verbatim for backwards compatibility.
+ */
+export function getEligiblePool(generatorId, slotKey, custom = [], dna) {
+  const pool = getPool(generatorId, slotKey, custom);
+  if (!dna) return pool; // backwards-compatible engine library API
+  return allowedKeywords(pool.filter(kw =>
+    isReforgeReady(kw) || kw.origin === 'user-custom'), dna);
 }
 
 /** 해당 생성기에서 유효한 장르 키를 보장한다 */
@@ -255,8 +268,7 @@ export function generateResult(generatorId, opts = {}) {
   const recent = opts.recent || {};
   const result = {};
   const pools = Object.fromEntries(gen.slots.map((slot) => {
-    const whole = getPool(generatorId, slot.key, opts.custom);
-    return [slot.key, opts.dna ? allowedKeywords(whole, opts.dna) : whole];
+    return [slot.key, getEligiblePool(generatorId, slot.key, opts.custom, opts.dna)];
   }));
   const assignments = opts.genres
     ? planGenreSlots({
@@ -302,7 +314,7 @@ export function generateResult(generatorId, opts = {}) {
 
 /** 항목별 재추첨 */
 export function rerollSlot(generatorId, slotKey, opts = {}) {
-  const pool = getPool(generatorId, slotKey, opts.custom);
+  const pool = getEligiblePool(generatorId, slotKey, opts.custom, opts.dna);
   const exclude = [
     ...(Array.isArray(opts.recent) ? opts.recent.slice(-4) : []),
     opts.previous
@@ -320,7 +332,7 @@ export function auditDNACoverage(generatorId, dna, custom = [], locks = {}, valu
   let available = 0;
   for (const slot of gen.slots) {
     const pool = getPool(generatorId,slot.key,custom);
-    const allowed = allowedKeywords(pool,d);
+    const allowed = getEligiblePool(generatorId,slot.key,custom,d);
     available += allowed.length;
     if (!locks[slot.key] && !allowed.length) empty.push(slot.label);
     if (locks[slot.key] && typeof values[slot.key] === 'string' && values[slot.key].trim()) {
