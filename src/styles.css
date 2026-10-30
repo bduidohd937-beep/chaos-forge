@@ -2432,3 +2432,223 @@ input[type="range"]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .quick-setup .setup-generator:hover { transform: none; }
 }
+
+
+/* ============================================================
+   UX CONVENIENCE PATCH — compact type switcher + focused layout
+   Shared visual grammar with CHAOS generator pills; keep 44px
+   touch targets and preserve focus/pressed state.
+   ============================================================ */
+.quick-setup-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.quick-setup-flow > .quick-setup-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+}
+.quick-generator-step {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  min-height: 80px;
+  padding: 14px 20px;
+}
+.quick-setup .quick-generator-step .setup-block-head {
+  margin: 0;
+  flex: 0 1 270px;
+  min-width: 200px;
+}
+.quick-setup .quick-generator-step .setup-generator-grid.quick-generator-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quick-setup .quick-generator-tabs .setup-generator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  min-width: 95px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border-color: #43516e;
+  background: rgba(19,28,48,.82);
+  transition: border-color .15s ease, background .15s ease;
+  box-shadow: none;
+  text-align: center;
+}
+.quick-setup .quick-generator-tabs .setup-generator:hover {
+  transform: none;
+  background: #232e4a;
+  border-color: #9c8bea;
+}
+.quick-setup .quick-generator-tabs .setup-generator.selected {
+  color: #10142b;
+  border-color: #af9afb;
+  background: linear-gradient(105deg, #a78cf9, #81c8e6);
+  box-shadow: none;
+}
+.quick-setup .quick-generator-tabs .setup-generator-symbol {
+  display: inline-block;
+  grid-row: auto;
+  font-size: 16px;
+  line-height: 1;
+  color: #9ce9eb;
+}
+.quick-setup .quick-generator-tabs .setup-generator.selected .setup-generator-symbol {
+  color: #1b2550;
+}
+.quick-setup .quick-generator-tabs .setup-generator strong {
+  font: 800 13px var(--mono);
+  line-height: 1.2;
+  letter-spacing: .01em;
+}
+.quick-setup-flow .quick-style {
+  margin-top: 0;
+  min-width: 0;
+}
+.quick-setup-flow .quick-style-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+.quick-setup-flow .quick-style .setup-mode-list,
+.quick-setup-flow .quick-style .quick-detail-choices {
+  grid-template-columns: repeat(3, minmax(0,1fr));
+}
+.quick-setup-flow .quick-style .setup-mode,
+.quick-setup-flow .quick-style .quick-detail-choices .dna-choice {
+  min-height: 64px;
+  justify-content: center;
+}
+.quick-setup-flow .quick-style-fieldset > legend {
+  margin-bottom: 8px;
+}
+.quick-setup-flow .quick-style .dna-hint { margin-top: 7px; }
+
+/* CHAOS: recipe + saved preferences are one compact context row. */
+.chaos-screen .chaos-context-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  border: 1px solid #394760;
+  border-radius: 12px;
+  background: rgba(20,29,49,.88);
+  padding: 10px 13px;
+  margin: 15px 0 12px;
+}
+.chaos-screen .chaos-context-strip .chaos-formula {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex: 1 1 280px;
+  min-width: 0;
+  gap: 6px;
+}
+.chaos-screen .chaos-context-strip .chaos-genre-pill {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.chaos-screen .chaos-context-strip .chaos-meta { font-size: 12px; }
+.chaos-screen .chaos-context-strip .dna-active-summary {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  gap: 6px 10px;
+}
+.chaos-screen .chaos-context-strip .dna-active-summary > span:first-child {
+  font-size: 10px;
+  color: #8fe2e8;
+}
+.chaos-screen .chaos-context-strip .dna-active-summary > strong { font-size: 12px; }
+.chaos-screen .chaos-context-strip .dna-active-summary > span:not(:first-child) {
+  font-size: 11px;
+  color: #c4cce4;
+}
+.chaos-screen .chaos-context-strip .dna-active-summary .btn {
+  margin-left: 3px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+.chaos-screen .chaos-control-deck {
+  padding: clamp(13px,1.8vw,20px);
+  gap: 10px;
+}
+.chaos-screen .chaos-deck-options {
+  justify-content: flex-start;
+  gap: 10px 17px;
+  padding-top: 11px;
+}
+.chaos-screen .mutation-controls-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.chaos-screen .chaos-control-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #b9c8de;
+}
+.chaos-screen .mutation-controls-wrap .mutation-controls { gap: 4px; }
+.chaos-screen .mutation-controls-wrap .mutation-btn {
+  font-size: 11px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+.chaos-screen .chaos-deck-options .reel-presets { border-color: #3f4f69; }
+.chaos-screen .chaos-deck-options .reel-preset { min-height: 34px; padding: 6px 10px; }
+.chaos-screen .chaos-deck-options .chaos-unlock { margin-left: auto; }
+.chaos-screen .mutation-result { margin: 0 2px 9px; }
+
+@media (max-width: 1000px) {
+  .quick-generator-step { align-items: flex-start; }
+  .quick-setup .quick-generator-step .setup-block-head { flex-basis: 100%; }
+  .quick-setup-flow > .quick-setup-grid { grid-template-columns: 1fr; }
+  .quick-setup-flow .quick-style-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .chaos-screen .chaos-deck-options .chaos-unlock { margin-left: 0; }
+}
+@media (max-width: 700px) {
+  .quick-setup-flow .quick-style-controls { grid-template-columns: 1fr; }
+  .quick-setup .quick-generator-tabs .setup-generator { flex: 1 1 105px; }
+  .chaos-screen .chaos-context-strip .chaos-formula { flex: 1 1 100%; }
+  .chaos-screen .chaos-context-strip .dna-active-summary {
+    flex: 1 1 100%;
+    padding-top: 7px;
+    border-top: 1px solid #35415d;
+  }
+  .chaos-screen .chaos-context-strip .dna-active-summary .btn { margin-left: auto; }
+  .chaos-screen .chaos-deck-options { align-items: flex-start; }
+  .chaos-screen .mutation-controls-wrap { width: 100%; }
+}
+@media (max-width: 480px) {
+  .quick-generator-step { padding: 12px; }
+  .quick-setup .quick-generator-step .setup-generator-grid.quick-generator-tabs {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    width: 100%;
+  }
+  .quick-setup .quick-generator-tabs .setup-generator {
+    min-width: 0;
+    width: 100%;
+    padding-inline: 8px;
+  }
+  .quick-setup .quick-generator-tabs .setup-generator strong { font-size: 12px; }
+  .chaos-screen .chaos-deck-options .chaos-unlock { width: 100%; }
+}
