@@ -26,10 +26,21 @@ export default function ForgeWorkspace({
   saved
 }) {
   const [sectionId, setSectionId] = useState(null);
+  const [simpleMode, setSimpleMode] = useState(true);
   const template = getForgeTemplate(generator.id);
   const normalized = normalizeForgeDoc(generator.id, doc);
+  const coreSection = template.sections[0];
   const progress = forgeProgress(generator.id, normalized);
+  const coreProgress = {
+    completed: coreSection.fields.filter((field) => normalized.fields[field.id].trim()).length,
+    total: coreSection.fields.length
+  };
+  const shownProgress = simpleMode
+    ? { ...coreProgress, percent: Math.round(coreProgress.completed / coreProgress.total * 100) }
+    : progress;
   const selected = template.sections.find((section) => section.id === sectionId) || template.sections[0];
+  const visibleSections = simpleMode ? [coreSection] : template.sections;
+  const visibleFields = simpleMode ? coreSection.fields : selected.fields;
   const sectionFilled = (section) =>
     section.fields.filter((field) => normalized.fields[field.id].trim()).length;
 
@@ -43,28 +54,35 @@ export default function ForgeWorkspace({
 
       <div className="forge-topbar">
         <div className="forge-progress-summary" aria-live="polite">
-          <span className="forge-progress-label">기획서 작성 진행도</span>
-          <strong>{progress.completed}<small> / {progress.total} 항목</small></strong>
+          <span className="forge-progress-label">{simpleMode ? '핵심 작성 진행도' : '전문 기획서 작성 진행도'}</span>
+          <strong>{shownProgress.completed}<small> / {shownProgress.total} 항목</small></strong>
           <div className="forge-progress-track" role="progressbar" aria-valuemin="0"
-            aria-valuemax={progress.total} aria-valuenow={progress.completed}
+            aria-valuemax={shownProgress.total} aria-valuenow={shownProgress.completed}
             aria-label="구조화된 기획서 작성 진행도">
-            <span style={{ width: `${progress.percent}%` }} />
+            <span style={{ width: `${shownProgress.percent}%` }} />
           </div>
         </div>
         <div className="forge-export-actions">
           <span className={`forge-save-state${saved ? '' : ' error'}`} role="status">
             {saved ? '● 자동 저장됨' : '⚠ 자동 저장 실패'}
           </span>
-          <button type="button" className="btn btn-outline" onClick={onCopyDocument}>
-            기획서 복사
-          </button>
-          <button type="button" className="btn btn-outline" onClick={() => onExport('md')}>
-            MD 저장
-          </button>
-          <button type="button" className="btn btn-outline" onClick={() => onExport('json')}>
-            JSON 백업
-          </button>
+          <div className="forge-export-group" aria-label="파일로 내보내기">
+            <span>파일로 내보내기</span>
+            <button type="button" className="btn btn-outline" onClick={onCopyDocument}>기획서 복사</button>
+            <button type="button" className="btn btn-outline" onClick={() => onExport('md')}>MD 저장</button>
+            <button type="button" className="btn btn-outline" onClick={() => onExport('json')}>JSON 백업</button>
+          </div>
         </div>
+      </div>
+
+      <div className="forge-mode-switch" role="group" aria-label="FORGE 작성 모드">
+        <div>
+          <strong>{simpleMode ? '간편 작성' : '전문 설정집'}</strong>
+          <p>{simpleMode ? '핵심 3개만 먼저 적고, 나머지는 필요할 때 펼쳐 보세요.' : '기존 4개 섹션과 모든 세부 항목을 한 문서에서 편집합니다.'}</p>
+        </div>
+        <button type="button" className="btn btn-outline" onClick={() => setSimpleMode((value) => !value)}>
+          {simpleMode ? '전문 설정집 펼치기' : '간편 작성으로 돌아가기'}
+        </button>
       </div>
 
       <div className="forge-studio-layout">
@@ -73,7 +91,7 @@ export default function ForgeWorkspace({
           <h3>설계 목차</h3>
           <p className="forge-outline-help">작업할 항목을 선택하세요. 다른 항목으로 이동해도 작성한 내용은 유지됩니다.</p>
           <nav className="forge-outline-nav" aria-label="편집 섹션">
-            {template.sections.map((section, index) => {
+            {visibleSections.map((section, index) => {
               const done = sectionFilled(section);
               return (
                 <button type="button" key={section.id}
@@ -109,7 +127,7 @@ export default function ForgeWorkspace({
                 <h3>{generator.tab} 기획서</h3>
               </div>
               <span className="forge-section-count">
-                {template.sections.findIndex((section) => section.id === selected.id) + 1} / {template.sections.length}
+                {simpleMode ? '핵심 3개' : `${template.sections.findIndex((section) => section.id === selected.id) + 1} / ${template.sections.length}`}
               </span>
             </div>
             <label htmlFor="forgeTitleInput">작품 제목</label>
@@ -126,7 +144,7 @@ export default function ForgeWorkspace({
             </div>
 
             <div className="forge-fields">
-              {selected.fields.map((field) => {
+              {visibleFields.map((field) => {
                 const suggestions = forgeSourceLines(generator.id, field.source, values);
                 const fieldId = `forge-field-${generator.id}-${field.id}`;
                 const hintId = `${fieldId}-hint`;
