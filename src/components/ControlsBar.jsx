@@ -1,4 +1,5 @@
 import { MODES } from '../engine.js';
+import { SYNERGY_LEVELS } from '../synergy.js';
 
 export default function ControlsBar({
   genres,
@@ -6,6 +7,8 @@ export default function ControlsBar({
   onGenreChange,
   mode,
   onModeChange,
+  synergy,
+  onSynergyChange,
   chaos,
   chaosHint,
   onChaosChange,
@@ -30,6 +33,14 @@ export default function ControlsBar({
             <option key={g.k} value={g.k}>{g.n}</option>
           ))}
         </select>
+      </div>
+
+      <div className="control">
+        <label className="control-label" htmlFor="synergySelect">연결 강도</label>
+        <select id="synergySelect" className="input" value={synergy} onChange={(e) => onSynergyChange(e.target.value)}>
+          {SYNERGY_LEVELS.map((level) => <option key={level.k} value={level.k}>{level.n}</option>)}
+        </select>
+        <p className="hint">{SYNERGY_LEVELS.find((level) => level.k === synergy)?.desc}</p>
       </div>
 
       <div className="control">

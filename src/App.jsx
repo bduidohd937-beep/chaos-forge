@@ -24,6 +24,7 @@ import IdeasPanel from './components/IdeasPanel.jsx';
 import CustomPanel from './components/CustomPanel.jsx';
 import ConceptPreview from './components/ConceptPreview.jsx';
 import { buildConceptPreview } from './synthesis.js';
+import { SYNERGY_LEVELS } from './synergy.js';
 import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
 import {
   normalizeDNA, banExact, toggleLike, deriveTopics,
@@ -169,6 +170,9 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [mode, setMode] = useState(
     () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'genre')
   );
+  const [synergy, setSynergy] = useState(
+    () => SYNERGY_LEVELS.some((level) => level.k === draft?.synergy) ? draft.synergy : 'free'
+  );
   const initialSelection = normalizeGenreSelection(
     GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story',
     draft?.genreSelection || { main: draft?.genre, subs: [] }
@@ -240,9 +244,9 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       setDraftSaved(false);
       return;
     }
-    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, enabledSlots, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
+    const ok = Storage.saveDraft({ generatorId, mode, synergy, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, enabledSlots, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, subgenres, chaos, results, enabledSlots, reelStyle, workspacePage, forgeDocs, dna, sessionPhase, backupRecovery]);
+  }, [generatorId, mode, synergy, genre, subgenres, chaos, results, enabledSlots, reelStyle, workspacePage, forgeDocs, dna, sessionPhase, backupRecovery]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -334,6 +338,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         genre: nextGenre,
         genres: { main: nextGenre, subs: nextSubs },
         chaos: nextChaos,
+        synergy,
         custom,
         dna: drawDNA,
         locks: drawLocks,
@@ -587,7 +592,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
    * Separate saved ideas, custom keywords and other generators survive.
    */
   const snapshotDraft = () => ({
-    generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres },
+    generatorId, mode, synergy, genre, genreSelection: { main: genre, subs: subgenres },
     chaos, results, reelStyle, workspacePage, forgeDocs,
     creativeDNA: dna, recentHistory: recentHistoryRef.current,
     sessionPhase: 'active'
@@ -619,6 +624,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     setResults(restoreResults(prior, restoredCustom));
     setGeneratorId(gid);
     setMode(MODES.some(m => m.k === prior.mode) ? prior.mode : 'hybrid');
+    setSynergy(SYNERGY_LEVELS.some(level => level.k === prior.synergy) ? prior.synergy : 'free');
     setGenre(selection.main);
     setSubgenres(selection.subs);
     setDNA(normalizeDNA(prior.creativeDNA));
@@ -689,6 +695,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     setGeneratorId(gid);
     setResults(restoreResults(prior, custom));
     setMode(MODES.some(m=>m.k===prior.mode)?prior.mode:'hybrid');
+    setSynergy(SYNERGY_LEVELS.some(level => level.k === prior.synergy) ? prior.synergy : 'free');
     setGenre(selection.main);
     setSubgenres(selection.subs);
     const previousChaos = Number(prior.chaos);
@@ -1159,6 +1166,13 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                 </div>
               </div>
               <div className="chaos-deck-options">
+                <div className="synergy-control" aria-label="스마트 연결 강도">
+                  <span className="chaos-control-label">SMART SYNERGY</span>
+                  <select className="input" id="synergySelect" value={synergy} onChange={(e) => setSynergy(e.target.value)}>
+                    {SYNERGY_LEVELS.map((level) => <option key={level.k} value={level.k}>{level.n}</option>)}
+                  </select>
+                  <p className="mutation-explainer">{SYNERGY_LEVELS.find((level) => level.k === synergy)?.desc}</p>
+                </div>
                 <div className="mutation-controls-wrap">
                   <span className="chaos-control-label">변이 방식</span>
                   <div className="mutation-controls" role="group" aria-label="변이 모드 선택">

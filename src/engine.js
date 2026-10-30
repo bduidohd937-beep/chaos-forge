@@ -27,6 +27,7 @@ import { preferFreshKeywords } from './quality.js';
 import { REFORGE_LIBRARY, isReforgeReady, withSingleWordAlias } from './data/reforge29Library.js';
 import { QUALITY30_LIBRARY } from './data/quality30.js';
 import { QUALITY11_LIBRARY } from './data/quality11.js';
+import { synergyWeight, isMeaningfullyDuplicate } from './synergy.js';
 
 export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES, ALL_GENRES, normalizeGenreSelection, planGenreSlots };
 
@@ -272,6 +273,7 @@ export function generateResult(generatorId, opts = {}) {
   const enabled = opts.enabled || {};
   const recent = opts.recent || {};
   const result = {};
+  const selectedKeywords = [];
   const pools = Object.fromEntries(gen.slots.map((slot) => {
     return [slot.key, getEligiblePool(generatorId, slot.key, opts.custom, opts.dna)];
   }));
@@ -306,18 +308,33 @@ export function generateResult(generatorId, opts = {}) {
       values[slot.key],
       ...Object.values(result)
     ];
-    const kw = pickKeyword(pools[slot.key], {
+    const anchorKeywords = selectedKeywords.slice(-4);
+    const candidatePool = opts.synergy && opts.synergy !== 'free'
+      ? pools[slot.key].map((item) => ({
+        ...item,
+        w: synergyWeight(item, { ...opts, generatorId, slotKey: slot.key, anchors: anchorKeywords, genre: assignments[slot.key] || opts.genre })
+      }))
+      : pools[slot.key];
+    const kw = pickKeyword(candidatePool, {
       ...opts,
       generatorId,
       preferredGenre: assignments[slot.key],
       exclude,
       previousTopics: opts.previousTopics || []
     });
+    const duplicate = opts.synergy && opts.synergy !== 'free' && kw && isMeaningfullyDuplicate(kw, selectedKeywords);
+    const fallback = duplicate
+      ? pickKeyword(candidatePool.filter((item) => !isMeaningfullyDuplicate(item, selectedKeywords)), {
+        ...opts, generatorId, preferredGenre: assignments[slot.key], exclude,
+        previousTopics: opts.previousTopics || {}
+      })
+      : kw;
     // If user excludes EVERYTHING, do not generate anything banned, and
     // never erase the previous result silently.
-    result[slot.key] = kw
-      ? (opts.dna ? renderedText(kw, opts.dna) : kw.t)
+    result[slot.key] = fallback
+      ? (opts.dna ? renderedText(fallback, opts.dna) : fallback.t)
       : (typeof values[slot.key] === 'string' ? values[slot.key] : '');
+    if (fallback) selectedKeywords.push(fallback);
   }
   return result;
 }
