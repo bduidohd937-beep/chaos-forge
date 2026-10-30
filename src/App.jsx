@@ -14,6 +14,8 @@ import {
 import Storage from './storage.js';
 import { buildExportData, buildJson, buildMarkdown, buildFilename, downloadFile } from './export.js';
 import SetupScreen from './components/SetupScreen.jsx';
+import CreativeDnaPanel from './components/CreativeDnaPanel.jsx';
+import BanManager from './components/BanManager.jsx';
 import ForgeWorkspace from './components/ForgeWorkspace.jsx';
 import ResultCard from './components/ResultCard.jsx';
 import IdeasPanel from './components/IdeasPanel.jsx';
@@ -155,6 +157,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [genre, setGenre] = useState(initialSelection.main);
   const [subgenres, setSubgenres] = useState(initialSelection.subs);
   const [setupAdvancedEntry, setSetupAdvancedEntry] = useState(false);
+  const [chaosPreferenceView, setChaosPreferenceView] = useState(null);
   const [workspacePage, setWorkspacePage] = useState(
     () => ['setup','chaos','forge','library'].includes(draft?.workspacePage)
       ? draft.workspacePage : 'chaos'
@@ -863,7 +866,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             <button type="button" key={page.id}
               className={`workspace-tab${page.id === workspacePage ? ' selected' : ''}`}
               aria-current={workspacePage === page.id ? 'page' : undefined}
-              onClick={() => { clearAnimations(); setSetupAdvancedEntry(false); setWorkspacePage(page.id); }}>
+              onClick={() => { clearAnimations(); setSetupAdvancedEntry(false); setChaosPreferenceView(null); setWorkspacePage(page.id); }}>
               <small>{String(index + 1).padStart(2, '0')}</small>
               <strong>{page.en}</strong>
               <span>{page.ko}</span>
@@ -1002,10 +1005,39 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             <div className="dna-active-summary">
               <span>CREATIVE DNA</span>
               <strong>{dna.detail==='brief'?'간결':dna.detail==='detailed'?'구체적':'기본'} 표현 · 독창성 {dna.novelty}/4</strong>
-              <span>⛔ 차단 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
-              <button type="button" className="btn btn-outline" onClick={()=>{ setSetupAdvancedEntry(true); setWorkspacePage('setup'); }}>취향·밴 편집</button>
+              <span>⛔ 제외 설정 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
+              <div className="dna-quick-actions" role="group" aria-label="취향과 차단 바로 관리">
+                <button type="button" className="btn btn-outline" id="openPreferencesBtn"
+                  aria-expanded={chaosPreferenceView==='preferences'}
+                  aria-controls="chaosPreferenceEditor"
+                  onClick={()=>setChaosPreferenceView(v=>v==='preferences'?null:'preferences')}>
+                  ✦ 취향 조절
+                </button>
+                <button type="button" className="btn btn-outline" id="openBanManagerBtn"
+                  aria-expanded={chaosPreferenceView==='ban'}
+                  aria-controls="chaosPreferenceEditor"
+                  onClick={()=>setChaosPreferenceView(v=>v==='ban'?null:'ban')}>
+                  ⛔ 차단 관리
+                </button>
+              </div>
               </div>
             </div>
+            {chaosPreferenceView && (
+              <section id="chaosPreferenceEditor" className="chaos-preference-editor"
+                aria-label={chaosPreferenceView==='ban'?'차단 관리':'창작 취향 조절'}>
+                <div className="chaos-preference-heading">
+                  <span>{chaosPreferenceView==='ban'
+                    ? '⛔ 피하고 싶은 소재를 선택하세요. 기존 결과는 유지되고 다음 추첨부터 적용돼요.'
+                    : '✦ 좋아하는 스타일을 조절하세요. 차단 설정과는 별개예요.'}</span>
+                  <button type="button" className="btn btn-outline" onClick={()=>setChaosPreferenceView(null)}>
+                    편집 닫기 ×
+                  </button>
+                </div>
+                {chaosPreferenceView==='preferences'
+                  ? <CreativeDnaPanel dna={dna} onChange={updateDNA} />
+                  : <BanManager dna={dna} onChange={updateDNA} initialOpen />}
+              </section>
+            )}
             {mutationMessage && <p className="mutation-result" role="status">{mutationMessage}</p>}
             <div className="chaos-control-deck">
               <div className="chaos-deck-main">
@@ -1028,16 +1060,23 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
                   <span className="chaos-control-label">변이 방식</span>
                   <div className="mutation-controls" role="group" aria-label="변이 모드 선택">
                     {[
-                      ['spark','SPARK','새 발상'],
-                      ['echo','ECHO','한 가지 계승'],
-                      ['rift','RIFT','파격 변형']
-                    ].map(([id,label,hint])=>(
+                      ['spark','SPARK','새로운 조합','새 소재들을 자유롭게 뽑아요.'],
+                      ['echo','ECHO','하나 유지','현재 설정 하나를 잠깐 보존하고 나머지를 뽑아요.'],
+                      ['rift','RIFT','파격 변형','다른 소재와 낯선 조합을 더 자주 선택해요.']
+                    ].map(([id,label,hint,explanation])=>(
                       <button type="button" key={id}
                         className={`mutation-btn${dna.mutation===id?' selected':''}`}
-                        aria-pressed={dna.mutation===id} title={hint}
-                        onClick={()=>updateDNA({...dna,mutation:id})}>{label}</button>
+                        aria-pressed={dna.mutation===id}
+                        title={explanation} onClick={()=>updateDNA({...dna,mutation:id})}>
+                        {label}<small aria-hidden="true"> · {hint}</small>
+                      </button>
                     ))}
                   </div>
+                  <p className="mutation-explainer">
+                    {dna.mutation==='echo'?'ECHO: 기존 아이디어의 한 조각을 이번 추첨에만 유지해요.'
+                      :dna.mutation==='rift'?'RIFT: 파격적인 소재를 우선하지만 BAN은 그대로 지켜요.'
+                      :'SPARK: 잠금으로 고정한 부분만 남기고 새 아이디어를 뽑아요.'}
+                  </p>
                 </div>
                 <div className="reel-presets" role="group" aria-label="랜덤 연출 방식">
                   <span className="reel-presets-label">추첨 연출</span>
