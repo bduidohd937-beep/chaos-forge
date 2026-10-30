@@ -1,0 +1,82 @@
+name: Deploy CHAOS FORGE V2 Preview
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages-v2-preview
+  cancel-in-progress: true
+
+env:
+  REVIEWED_V2_SHA: 757ce342540244960555fe1114eb60ee07e03413
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout V1 root
+        uses: actions/checkout@v4
+        with:
+          path: v1-source
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            v1-source/package-lock.json
+            v2-source/package-lock.json
+
+      - name: Build protected V1 root
+        working-directory: v1-source
+        run: |
+          npm ci
+          npm test -- --run
+          npm run build
+
+      - name: Checkout reviewed V2 commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REVIEWED_V2_SHA }}
+          path: v2-source
+
+      - name: Build V2 preview
+        working-directory: v2-source
+        run: |
+          npm ci
+          npm test -- --run
+          npm run build
+
+      - name: Assemble Pages artifact
+        run: |
+          mkdir -p pages-artifact/preview/v2
+          cp -R v1-source/dist/. pages-artifact/
+          cp -R v2-source/dist/. pages-artifact/preview/v2/
+          touch pages-artifact/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-artifact
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy V1 root + V2 preview
+        id: deployment
+        uses: actions/deploy-pages@v4
