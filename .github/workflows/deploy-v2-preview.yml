@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REVIEWED_V2_SHA: cf44a73676eb9000f363325d351859a82f8165fb
+  REVIEWED_V2_SHA: 4cb1ccddd40192bf73dd8acac90cbffe4307a7eb
 
 jobs:
   build:
