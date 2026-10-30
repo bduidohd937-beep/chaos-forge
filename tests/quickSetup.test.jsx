@@ -36,7 +36,7 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     expect(document.querySelector('.quick-setup-launch .setup-start')).not.toBeNull();
     expect(document.querySelector('#subGenreSearch')).toBeNull();
     expect(document.querySelector('#dnaNovelty')).toBeNull();
-    expect(document.querySelector('.dna-ban-details')).toBeNull();
+    expect(document.querySelector('.ban-panel')).toBeNull();
     expect(screen.getByRole('button', { name: /고급 설정/ }).getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -130,8 +130,8 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     fireEvent.change(document.querySelector('#chaosRange'), { target: { value: '5' } });
     fireEvent.change(document.querySelector('#dnaNovelty'), { target: { value: '4' } });
     fireEvent.change(document.querySelector('#dnaMood'), { target: { value: 'bright' } });
-    const banDetail = document.querySelector('.dna-ban-details');
-    click(banDetail.querySelector('summary'));
+    const banDetail = document.querySelector('.ban-panel');
+    click(banDetail.querySelector('.ban-manage-toggle'));
     click(screen.getByLabelText('좀비·언데드'));
     expect(Storage.loadDraft().creativeDNA.bannedTopics).toContain('undead');
     expandAdvanced();
@@ -142,15 +142,19 @@ describe('UX REFORGE — three-step setup and progressive disclosure', () => {
     expect(document.querySelector('#chaosRange').value).toBe('5');
     expect(document.querySelector('#dnaNovelty').value).toBe('4');
     expect(document.querySelector('#dnaMood').value).toBe('bright');
-    expect(document.querySelector('.dna-ban-details')).not.toBeNull();
+    expect(document.querySelector('.ban-panel')).not.toBeNull();
   });
 
-  it('CHAOS preference edit directly opens advanced controls, unlike regular SETUP tab', () => {
+  it('CHAOS preference and BAN editing opens inline without navigating away from results', () => {
     start();
-    click(screen.getByRole('button', { name: '취향·밴 편집' }));
-    expect(document.querySelector('[data-screen]').dataset.screen).toBe('setup');
+    click(document.querySelector('#openPreferencesBtn'));
+    expect(document.querySelector('[data-screen]').dataset.screen).toBe('chaos');
     expect(document.querySelector('#dnaNovelty')).not.toBeNull();
-    go('CHAOS');
+    click(document.querySelector('#openBanManagerBtn'));
+    expect(document.querySelector('#dnaNovelty')).toBeNull();
+    expect(document.querySelector('.ban-panel .dna-ban-grid')).not.toBeNull();
+    click(screen.getByRole('button', { name: /편집 닫기/ }));
+    expect(document.querySelector('.chaos-preference-editor')).toBeNull();
     go('SETUP');
     expect(document.querySelector('#dnaNovelty')).toBeNull();
   });
