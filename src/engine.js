@@ -23,6 +23,7 @@ import { ALPHA5_LIBRARY } from './data/alpha5.js';
 import { allowedKeywords, dnaWeight, renderedText, normalizeDNA, isExactBanned, isBanned } from './creativeDNA.js';
 import { ALL_GENRES, normalizeGenreSelection, pickWithGenreMix } from './genreMix.js';
 import { planGenreSlots } from './composition.js';
+import { preferFreshKeywords } from './quality.js';
 
 export { GENRE_NAME_MAP, STORY_GENRES, GAME_GENRES, ALL_GENRES, normalizeGenreSelection, planGenreSlots };
 
@@ -187,13 +188,7 @@ export function pickKeyword(inputPool, opts = {}) {
 
   // Legacy single-genre calls still support recency exclusions, but never
   // let exclusions make a previously valid genre run out of matching values.
-  const blocked = new Set((Array.isArray(opts.exclude) ? opts.exclude : [])
-    .filter((text) => typeof text === 'string')
-    .map((text) => text.trim().toLocaleLowerCase()));
-  const withoutRecent = (items) => {
-    const allowed = items.filter((kw) => !blocked.has(kw.t.trim().toLocaleLowerCase()));
-    return allowed.length ? allowed : items;
-  };
+  const withoutRecent = (items) => preferFreshKeywords(items, opts.exclude);
 
   if (mode === 'random' || !genre) {
     return weightedPick(withoutRecent(pool), null, rng);
