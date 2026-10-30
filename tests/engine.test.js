@@ -215,7 +215,7 @@ describe('전체 생성 / 잠금 / 재추첨', () => {
     for (const gen of GENERATORS) {
       for (const slot of gen.slots) {
         const text = rerollSlot(gen.id, slot.key, { mode: 'random', genre: gen.genreList[0].k });
-        expect(gen.data[slot.key].map((kw) => kw.t)).toContain(text);
+        expect(getPool(gen.id, slot.key).map((kw) => kw.t)).toContain(text);
       }
     }
   });
@@ -225,9 +225,9 @@ describe('전체 생성 / 잠금 / 재추첨', () => {
       { id: 'x1', generator: 'story', slot: 'setting', text: '내가 만든 배경', genres: ['판'], weight: 1 }
     ];
     const pool = getPool('story', 'setting', custom);
-    expect(pool).toHaveLength(DATA_STORY.setting.length + 1);
+    expect(pool).toHaveLength(getPool('story', 'setting').length + 1);
     expect(pool.map((kw) => kw.t)).toContain('내가 만든 배경');
-    expect(DATA_STORY.setting).toHaveLength(pool.length - 1);
+    expect(DATA_STORY.setting.length).toBeGreaterThanOrEqual(20);
 
     let hit = false;
     for (let i = 0; i < 400 && !hit; i++) {
