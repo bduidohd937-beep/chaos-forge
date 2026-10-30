@@ -20,17 +20,20 @@ describe('CREATIVE DNA — user-facing generation and preferences',()=>{
   it('settings lab persists detail, novelty and mood after navigation and reload',()=>{
     const mounted=run();open('SETUP');
     fireEvent.click(screen.getByRole('button',{name:/구체적.*배경/}));
+    fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
     fireEvent.change(document.querySelector('#dnaNovelty'),{target:{value:'4'}});
     fireEvent.change(document.querySelector('#dnaMood'),{target:{value:'dark'}});
     expect(Storage.loadDraft().creativeDNA).toMatchObject({detail:'detailed',novelty:4,mood:'dark'});
     open('CHAOS');
     expect(document.querySelector('.dna-active-summary').textContent).toContain('구체적');
     mounted.unmount();run();open('SETUP');
+    fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
     expect(document.querySelector('#dnaNovelty').value).toBe('4');
     expect(document.querySelector('#dnaMood').value).toBe('dark');
   });
   it('topic and style BAN selections can be saved and reversed',()=>{
     run();open('SETUP');
+    fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
     const control=document.querySelector('.dna-ban-details');
     fireEvent.click(control.querySelector('summary'));
     const zombie=screen.getByLabelText('좀비·언데드');
@@ -51,6 +54,7 @@ describe('CREATIVE DNA — user-facing generation and preferences',()=>{
     fireEvent.click(document.querySelector('#generateBtn'));
     expect(card.querySelector('.card-value').textContent).not.toBe(first);
     open('SETUP');
+    fireEvent.click(screen.getByRole('button',{name:/고급 설정/}));
     fireEvent.click(document.querySelector('.dna-ban-details summary'));
     expect(document.querySelector('.dna-exact-list').textContent).toContain(first);
   });
