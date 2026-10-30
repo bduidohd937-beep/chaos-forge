@@ -5,6 +5,7 @@ import { planGenreSlots } from '../src/composition.js';
 import { ALPHA3_KEYWORDS } from '../src/data/alpha3.js';
 import { ALPHA5_LIBRARY } from '../src/data/alpha5.js';
 import { REFORGE_LIBRARY } from '../src/data/reforge29Library.js';
+import { QUALITY30_LIBRARY } from '../src/data/quality30.js';
 import { K } from '../src/data/genres.js';
 
 function seeded(seed) {
@@ -52,7 +53,7 @@ describe('Alpha 3 curated keywords', () => {
         const extras = ALPHA3_KEYWORDS[gen.id]?.[slot.key] || [];
         expect(extras.length).toBeGreaterThan(0);
         const pool = getPool(gen.id, slot.key);
-        expect(pool.length).toBe(gen.data[slot.key].length + extras.length + (ALPHA5_LIBRARY[gen.id]?.[slot.key]?.length || 0) + (REFORGE_LIBRARY[gen.id]?.[slot.key]?.length || 0));
+        expect(pool.length).toBe(gen.data[slot.key].length + extras.length + (ALPHA5_LIBRARY[gen.id]?.[slot.key]?.length || 0) + (REFORGE_LIBRARY[gen.id]?.[slot.key]?.length || 0) + (QUALITY30_LIBRARY[gen.id]?.[slot.key]?.length || 0));
         expect(new Set(pool.map((kw) => kw.t)).size, gen.id + '.' + slot.key).toBe(pool.length);
         for (const kw of extras) {
           expect(kw.t.length).toBeGreaterThanOrEqual(5);
