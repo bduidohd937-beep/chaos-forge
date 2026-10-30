@@ -55,7 +55,13 @@ describe('Alpha 4 FORGE studio UI', () => {
     section('서사 구조');
     expect(field('logline')).toBeNull();
     expect(field('opening')).not.toBeNull();
+    // UX 2.4 shows progress for the CURRENT section, rather than the
+    // intimidating 13-field global count.
+    expect(document.querySelector('.forge-progress-track').getAttribute('aria-valuenow')).toBe('0');
+    expect(document.querySelector('.forge-stage-progress').textContent).toContain('0 / 4');
+    section('작품의 중심');
     expect(document.querySelector('.forge-progress-track').getAttribute('aria-valuenow')).toBe('1');
+    expect(field('logline').value).toBe('사라진 왕국의 법을 찾는 탐정');
   });
 
   it('keeps legacy title and notes while adding structured content and restoring after reload', () => {
