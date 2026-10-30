@@ -85,6 +85,18 @@ describe('UX 2.7 — complete V2 backup and crash-safe restore', () => {
     expect(localStorage.getItem(storageKey('restore-transaction'))).toBeNull();
   });
 
+  it('rejects oversized authored fields rather than silently trimming backup data', () => {
+    const tooLong=fixture();
+    tooLong.draft.forgeDocs.story.fields.logline='A'.repeat(12001);
+    expect(()=>buildWorkspaceBackup(tooLong)).toThrow(/FORGE/);
+    const oversizeCard=fixture();
+    oversizeCard.draft.results.story.values.setting='B'.repeat(5001);
+    expect(()=>buildWorkspaceBackup(oversizeCard)).toThrow(/카드/);
+    const oversizeDNA=fixture();
+    oversizeDNA.draft.creativeDNA.bannedExact=Array.from({length:81},(_,i)=>'차단'+i);
+    expect(()=>buildWorkspaceBackup(oversizeDNA)).toThrow(/취향/);
+  });
+
   it('strict backup capture refuses corrupted stored collections rather than silently dropping them', () => {
     const original=fixture();
     localStorage.setItem(storageKey('ideas'),'{invalid');
