@@ -1,4 +1,4 @@
-name: Deploy CHAOS FORGE V2 Preview
+name: Deploy CHAOS FORGE (V1 + V2 Preview)
 
 on:
   push:
@@ -11,7 +11,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages-v2-preview
+  # One Pages publisher for V1 root + pinned V2 preview.
+  group: github-pages
   cancel-in-progress: true
 
 env:
@@ -25,6 +26,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: v1-source
+
+      - name: Checkout reviewed V2 commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REVIEWED_V2_SHA }}
+          path: v2-source
+          persist-credentials: false
+
+      - name: Verify exact V2 source commit
+        run: test "$(git -C v2-source rev-parse HEAD)" = "$REVIEWED_V2_SHA"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -42,11 +53,6 @@ jobs:
           npm test -- --run
           npm run build
 
-      - name: Checkout reviewed V2 commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.REVIEWED_V2_SHA }}
-          path: v2-source
 
       - name: Build V2 preview
         working-directory: v2-source
@@ -61,6 +67,11 @@ jobs:
           cp -R v1-source/dist/. pages-artifact/
           cp -R v2-source/dist/. pages-artifact/preview/v2/
           touch pages-artifact/.nojekyll
+          # Fail rather than silently publishing a missing or incomplete preview.
+          test -f pages-artifact/index.html
+          test -f pages-artifact/preview/v2/index.html
+          test -d pages-artifact/preview/v2/assets
+          test -f pages-artifact/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
