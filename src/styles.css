@@ -1974,3 +1974,163 @@ input[type="range"]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .forge-progress-track > span { transition: none; }
 }
+
+
+/* ===== CREATIVE DNA 5 — compact, user-controllable inspiration ===== */
+.setup-dna-stage { margin-top: 19px; }
+.dna-panel { padding: clamp(18px,2.2vw,28px); }
+.dna-panel .setup-block-head { margin-bottom: 17px; }
+.dna-panel .setup-block-head h3 { font-size: 21px; margin: 4px 0; }
+.dna-controls { display: grid; gap: 18px; }
+.dna-fieldset,.dna-ban-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dna-fieldset legend, .dna-ban-fieldset legend,
+.dna-two-col label { color: #eff3ff; font-size: 15px; font-weight: 800; padding: 0 0 11px; }
+.dna-fieldset .dna-option-row { margin: 0; }
+.dna-option-row { display: flex; gap: 9px; flex-wrap: wrap; }
+.dna-choice {
+  flex: 1 1 140px;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  border: 1px solid #475676;
+  background: #121b31;
+  border-radius: 10px;
+  padding: 12px 13px;
+  color: #e2eafb;
+  cursor: pointer;
+  text-align: left;
+}
+.dna-choice strong { font-size: 14px; }
+.dna-choice small { color: #becbe0; font-size: 12px; line-height: 1.45; }
+.dna-choice.selected {
+  background: linear-gradient(120deg,rgba(140,103,240,.28),rgba(80,138,181,.16));
+  border-color: #ba9dff; color: #fff;
+}
+.dna-choice:hover:not(.selected) { border-color: #78bacd; }
+.dna-hint { color: #b4c6de; font-size: 12.5px; line-height: 1.65; margin: 9px 0 0; }
+.dna-two-col {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 20px;
+  padding: 17px;
+  border: 1px solid #34405b;
+  border-radius: 12px;
+  background: rgba(7,15,29,.5);
+}
+.dna-two-col label { display: flex; justify-content: space-between; gap: 10px; }
+.dna-two-col label strong { color: var(--cyan); }
+.dna-two-col input[type=range] { width: 100%; accent-color: #ab86ff; }
+.dna-two-col .input { min-height: 43px; background: #0d172a; }
+.dna-ban-details {
+  border: 1px solid #42516f;
+  background: rgba(15,23,42,.67);
+  border-radius: 12px;
+  margin-top: 18px;
+}
+.dna-ban-details > summary {
+  cursor: pointer;
+  padding: 15px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px 18px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #e0e7f8;
+}
+.dna-ban-count { color: #94e4e9; font-size: 12px; font-weight: 650; }
+.dna-ban-inner { border-top: 1px solid #3a4761; padding: 18px; display: grid; gap: 20px; }
+.dna-ban-mode > strong { display: block; margin-bottom: 12px; font-size: 14px; }
+.dna-ban-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.dna-check {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #344360;
+  border-radius: 9px;
+  background: #121d32;
+  font-size: 13px;
+  font-weight: 650;
+  color: #d5e0f2;
+  cursor: pointer;
+}
+.dna-check.selected { border-color: #d8a678; background: rgba(225,161,101,.14); color: #fff; }
+.dna-check input { accent-color: #cf8f52; flex: none; }
+.dna-exact > label { display: block; margin-bottom: 11px; font-weight: 800; font-size: 14px; }
+.dna-exact form { display: flex; gap: 9px; }
+.dna-exact form .input { flex: 1 1 200px; min-width: 0; }
+.dna-exact-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.dna-ban-chip {
+  border-radius: 9px;
+  border: 1px solid #c88e74;
+  background: rgba(168,97,74,.16);
+  padding: 7px 10px;
+  color: #ffe0cd;
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.dna-ban-chip span { padding-left: 5px; font-size: 16px; }
+.dna-audit {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px 18px;
+  border-top: 1px solid #34415e;
+  color: #b8cce3;
+  margin-top: 20px; padding-top: 15px; font-size: 13px;
+}
+.dna-audit strong { color: #91e7e9; font-size: 14px; }
+.dna-active-summary {
+  display:flex; flex-wrap:wrap; align-items:center; gap:9px 13px;
+  margin: -5px 0 18px;
+  padding: 11px 16px;
+  background: rgba(21,31,53,.7);
+  border: 1px solid #33425e;
+  border-radius: 11px;
+  color: #cbd9e9;
+  font-size: 12px;
+}
+.dna-active-summary > span:first-child { color: #8ce1e7; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.dna-active-summary strong { color: #f4f2ff; font-size: 13px; }
+.dna-active-summary .btn { margin-left: auto; padding: 7px 12px; font-size: 12px; }
+.mutation-deck {
+  display: flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:11px 20px;
+  border: 1px solid #3d4668; border-radius: 12px; background: #171c33;
+  padding: 13px 16px; margin: 0 0 12px;
+}
+.mutation-deck > div > strong { display: block; color: #e9e6ff; font-size: 13px; }
+.mutation-deck p { color: #b8c7dd; margin: 5px 0 0; font-size: 12px; line-height: 1.5; }
+.mutation-controls { display: flex; gap: 6px; }
+.mutation-btn {
+  appearance:none; cursor:pointer; background: #11192d;
+  color: #b5c7df; border: 1px solid #415074; border-radius: 9px;
+  font: 800 12px var(--mono); min-height: 39px; padding: 8px 12px;
+}
+.mutation-btn.selected { background: rgba(153,113,255,.29); color:#fff; border-color:#b89aff; }
+.mutation-result { color:#92e2ea; margin: -2px 3px 12px; font-size: 13px; }
+.chaos-screen .result-card .card-tools { gap: 5px; flex-wrap: wrap; }
+.chaos-screen .result-card .js-like,
+.chaos-screen .result-card .js-ban {
+  font-family: var(--sans); font-size: 19px; font-weight: 800;
+}
+.chaos-screen .result-card .js-like.is-on { border-color: #efc677; color:#ffe6a1; background: rgba(240,192,93,.17); }
+.chaos-screen .result-card .js-ban { color: #dbb7bd; }
+.chaos-screen .result-card .js-ban.is-on { border-color: #eaa1a6; color: #ffd2d3; background: rgba(235,124,139,.14); }
+@media (max-width: 750px) {
+  .dna-ban-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .dna-two-col { grid-template-columns: 1fr; gap: 15px; }
+}
+@media (max-width: 520px) {
+  .dna-ban-grid { grid-template-columns: 1fr 1fr; }
+  .dna-check { font-size: 12px; padding: 9px; }
+  .dna-option-row { flex-direction: column; }
+  .dna-choice { flex: 1 0 auto; }
+  .dna-exact form { flex-direction: column; }
+  .mutation-controls { width: 100%; }
+  .mutation-btn { flex: 1; }
+  .chaos-screen .result-card .card-head { flex-wrap: wrap; }
+  .chaos-screen .result-card .card-tools { margin-left: auto; }
+  .chaos-screen .result-card .icon-btn { width: 38px; height: 38px; }
+}
