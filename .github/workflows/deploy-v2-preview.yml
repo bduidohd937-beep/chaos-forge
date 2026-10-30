@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REVIEWED_V2_SHA: bf1091807ec5ead04af8c516e690e17ca8ff9ced
+  REVIEWED_V2_SHA: ce97c2f4075495bea3792698063a066d6722f0a7
 
 jobs:
   build:
@@ -52,7 +52,6 @@ jobs:
           npm ci
           npm test -- --run
           npm run build
-
 
       - name: Build V2 preview
         working-directory: v2-source
