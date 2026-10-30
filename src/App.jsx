@@ -7,6 +7,7 @@ import {
   generateResult,
   rerollSlot,
   getPool,
+  getEligiblePool,
   auditDNACoverage,
   normalizeGenreSelection,
   ALL_GENRES
@@ -26,7 +27,7 @@ import { buildConceptPreview } from './synthesis.js';
 import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
 import {
   normalizeDNA, banExact, toggleLike, deriveTopics,
-  auditKeywordPools, allowedKeywords, renderedText
+  auditKeywordPools, renderedText
 } from './creativeDNA.js';
 
 const CHAOS_HINTS = {
@@ -57,9 +58,11 @@ function seedResults(customKeywords) {
   for (const gen of GENERATORS) {
     seeded[gen.id] = {
       values: generateResult(gen.id, {
-        mode: 'hybrid',
+        mode: 'genre',
         genre: gen.genreList[0].k,
+        genres: { main: gen.genreList[0].k, subs: [] },
         chaos: 3,
+        dna: normalizeDNA(),
         custom: customKeywords
       }),
       locks: {}
@@ -151,7 +154,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     () => (GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story')
   );
   const [mode, setMode] = useState(
-    () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'hybrid')
+    () => (MODES.some((m) => m.k === draft?.mode) ? draft.mode : 'genre')
   );
   const initialSelection = normalizeGenreSelection(
     GENERATOR_MAP[draft?.generatorId] ? draft.generatorId : 'story',
@@ -339,7 +342,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
       if (animated) {
         const pools = {};
-        for (const key of unlocked) pools[key] = allowedKeywords(getPool(gid,key,custom),drawDNA);
+        for (const key of unlocked) pools[key] = getEligiblePool(gid,key,custom,drawDNA);
 
         // 정답을 0.07초 먼저 보여 주지 않고 이전 결과부터 슬롯을 돌린다.
         setSpinText({ ...snapshot.values });
@@ -1072,7 +1075,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
             </div>
             <div className="dna-active-summary">
               <span>CREATIVE DNA</span>
-              <strong>{dna.detail==='brief'?'간결':dna.detail==='detailed'?'구체적':'기본'} 표현 · 독창성 {dna.novelty}/4</strong>
+              <strong>{dna.detail==='brief'?'키워드':dna.detail==='detailed'?'구체설정':'기본문장'} · 독창성 {dna.novelty}/4</strong>
               <span>⛔ 제외 설정 {dna.bannedExact.length+dna.bannedTopics.length+dna.bannedStyles.length}개</span>
               <div className="dna-quick-actions" role="group" aria-label="취향과 차단 바로 관리">
                 <button type="button" className="btn btn-outline" id="openPreferencesBtn"
