@@ -299,6 +299,7 @@ describe('V1.2 CHAOS MODE', () => {
 
     go('SETUP');
     expect(screen.getByRole('radio', { name: '장르 맞춤' }).getAttribute('aria-checked')).toBe('true');
+    click(screen.getByRole('button', { name: /고급 설정/ }));
     expect(document.querySelector('#chaosValue').textContent.trim().startsWith('3')).toBe(true);
   });
 
@@ -605,7 +606,7 @@ describe('V2.0 Alpha 가독성·화면 구성 검수', () => {
     const tile = document.querySelector('.genre-tile');
     click(tile);
     expect(tile.getAttribute('aria-pressed')).toBe('true');
-    expect(document.querySelector('.setup-picked').textContent).toContain('스팀펑크');
+    expect(document.querySelector('.quick-sub-tags').textContent).toContain('스팀펑크');
     fireEvent.change(search, { target: { value: '' } });
     expect(Array.from(document.querySelectorAll('.genre-tile')).some(
       item => item.textContent.includes('스팀펑크')
