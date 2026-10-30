@@ -23,7 +23,7 @@ import { buildConceptPreview } from './synthesis.js';
 import { normalizeForgeDoc, getForgeFields, buildForgeExportData, buildForgeMarkdown } from './forgeSchema.js';
 import {
   normalizeDNA, banExact, toggleLike, deriveTopics,
-  auditKeywordPools
+  auditKeywordPools, allowedKeywords, renderedText
 } from './creativeDNA.js';
 
 const CHAOS_HINTS = {
@@ -317,7 +317,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
       if (animated) {
         const pools = {};
-        for (const key of unlocked) pools[key] = getPool(gid, key, custom);
+        for (const key of unlocked) pools[key] = allowedKeywords(getPool(gid,key,custom),drawDNA);
 
         // 정답을 0.07초 먼저 보여 주지 않고 이전 결과부터 슬롯을 돌린다.
         setSpinText({ ...snapshot.values });
@@ -343,7 +343,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               // 슬롯 연출: 처음엔 빠르게, 끝날수록 느리게.
               if (isSlot && remaining < 230 && frame % 3 !== 0) return;
               if (isSlot && remaining >= 230 && remaining < 430 && frame % 2 !== 0) return;
-              next[key] = pool[Math.floor(Math.random() * pool.length)].t;
+              next[key] = renderedText(pool[Math.floor(Math.random() * pool.length)],drawDNA);
             });
             return next;
           });
@@ -416,7 +416,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     setActiveSpinStyle(isSlot ? 'slot' : 'classic');
     if (animationMs <= 0 || reelStyle === 'instant') return;
 
-    const pool = getPool(generatorId, slotKey, custom);
+    const pool = allowedKeywords(getPool(generatorId, slotKey, custom),dna);
     const duration = isSlot ? Math.max(520, animationMs * 0.8) : Math.max(260, animationMs * 0.6);
     const cadence = isSlot ? 52 : SPIN_STEP;
     const start = Date.now();
@@ -431,7 +431,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
       if (isSlot && remaining >= 180 && remaining < 300 && frame % 2 !== 0) return;
       setSpinText((prev) => ({
         ...prev,
-        [slotKey]: pool.length ? pool[Math.floor(Math.random() * pool.length)].t : text
+        [slotKey]: pool.length ? renderedText(pool[Math.floor(Math.random() * pool.length)],dna) : text
       }));
     }, cadence);
 
