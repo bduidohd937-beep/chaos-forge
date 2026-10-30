@@ -21,6 +21,7 @@ function validateDraft(draft, description) {
   }
   for (const [gen, entry] of Object.entries(draft.results)) {
     if (gen === '__proto__' || !isRecord(entry) || !validStringMap(entry.values) ||
+        Object.values(entry.values || {}).some(value => typeof value === 'string' && value.length > 5000) ||
         (entry.locks != null && !validBooleanMap(entry.locks))) {
       fail(`${description}: 카드 결과나 잠금 정보가 손상됐습니다.`);
     }
@@ -29,15 +30,25 @@ function validateDraft(draft, description) {
     if (!isRecord(draft.forgeDocs)) fail(`${description}: FORGE 문서가 손상됐습니다.`);
     for (const [gen, doc] of Object.entries(draft.forgeDocs)) {
       if (gen === '__proto__' || !isRecord(doc) ||
-          (doc.title != null && typeof doc.title !== 'string') ||
-          (doc.notes != null && typeof doc.notes !== 'string') ||
-          (doc.fields != null && !validStringMap(doc.fields))) {
+          (doc.title != null && (typeof doc.title !== 'string' || doc.title.length > 100)) ||
+          (doc.notes != null && (typeof doc.notes !== 'string' || doc.notes.length > 20000)) ||
+          (doc.fields != null && (!validStringMap(doc.fields) ||
+            Object.values(doc.fields).some(value => value.length > 12000))))) {
         fail(`${description}: FORGE 문서의 일부 항목이 손상됐습니다.`);
       }
     }
   }
-  if (draft.creativeDNA != null && !isRecord(draft.creativeDNA)) {
-    fail(`${description}: 취향·차단 설정이 손상됐습니다.`);
+  if (draft.creativeDNA != null) {
+    if (!isRecord(draft.creativeDNA)) {
+      fail(`${description}: 취향·차단 설정이 손상됐습니다.`);
+    }
+    for (const name of ['bannedExact', 'likes']) {
+      const list = draft.creativeDNA[name];
+      if (list != null && (!Array.isArray(list) || list.length > 80 ||
+        list.some(value => typeof value !== 'string' || value.length > 200))) {
+        fail(`${description}: 취향·차단 목록이 허용 범위를 초과합니다.`);
+      }
+    }
   }
   if (draft.genreSelection != null && !isRecord(draft.genreSelection)) {
     fail(`${description}: 장르 설정이 손상됐습니다.`);
