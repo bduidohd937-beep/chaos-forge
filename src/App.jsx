@@ -17,6 +17,7 @@ import SetupScreen from './components/SetupScreen.jsx';
 import CreativeDnaPanel from './components/CreativeDnaPanel.jsx';
 import BanManager from './components/BanManager.jsx';
 import ForgeWorkspace from './components/ForgeWorkspace.jsx';
+import WorkspaceBackupPanel from './components/WorkspaceBackupPanel.jsx';
 import ResultCard from './components/ResultCard.jsx';
 import IdeasPanel from './components/IdeasPanel.jsx';
 import CustomPanel from './components/CustomPanel.jsx';
@@ -133,6 +134,8 @@ function restoreResults(draft, customKeywords) {
  * @param {{animationMs?: number}} props animationMs=0 이면 슬롯 연출 없이 즉시 표시 (테스트용)
  */
 export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
+  // Restore an interrupted multi-key import BEFORE reading any draft.
+  const [backupRecovery] = useState(() => Storage.recoverInterruptedRestore());
   const [draft] = useState(() => Storage.loadDraft());
   // A first visit displays sample ideas, not a completed generation.
   // Old drafts without this flag are treated as previously authored work.
@@ -209,9 +212,14 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
+    // Never overwrite a half-restored draft if durable recovery is unavailable.
+    if (backupRecovery === 'failed') {
+      setDraftSaved(false);
+      return;
+    }
     const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna, sessionPhase]);
+  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna, sessionPhase, backupRecovery]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -551,6 +559,48 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     creativeDNA: dna, recentHistory: recentHistoryRef.current,
     sessionPhase: 'active'
   });
+  const downloadFullBackup = () => {
+    // Capture the LIVE draft, not a possibly stale last-written autosave.
+    const backup = Storage.createFullBackup(snapshotDraft());
+    return downloadFile(buildFilename('v2-workspace-backup', 'json'),
+      JSON.stringify(backup, null, 2), 'application/json;charset=utf-8');
+  };
+
+  const restoreFullBackup = (bundle) => {
+    if (backupRecovery === 'failed') {
+      throw new Error('이전에 중단된 복원이 남아 있어 자동 저장을 보호 중입니다.');
+    }
+    const { draft: prior } = Storage.restoreFullBackup(bundle);
+    const restoredCustom = Storage.loadCustom();
+    const gid = GENERATOR_MAP[prior.generatorId] ? prior.generatorId : 'story';
+    const selection = normalizeGenreSelection(gid, prior.genreSelection || { main: prior.genre, subs: [] });
+    clearAnimations();
+    setSpinText({});
+    setConfirmNew(false);
+    setMutationMessage('');
+    setTitle('');
+    setSearch('');
+    setLibraryTab('ideas');
+    recentHistoryRef.current = restoreRecentHistory(prior);
+    setCustom(restoredCustom);
+    setResults(restoreResults(prior, restoredCustom));
+    setGeneratorId(gid);
+    setMode(MODES.some(m => m.k === prior.mode) ? prior.mode : 'hybrid');
+    setGenre(selection.main);
+    setSubgenres(selection.subs);
+    setDNA(normalizeDNA(prior.creativeDNA));
+    setForgeDocs(prior.forgeDocs && typeof prior.forgeDocs === 'object' && !Array.isArray(prior.forgeDocs) ? prior.forgeDocs : {});
+    const previousChaos = Number(prior.chaos);
+    setChaos(Number.isInteger(previousChaos) && previousChaos >= 1 && previousChaos <= 5 ? previousChaos : 3);
+    setReelStyle(REEL_STYLES.includes(prior.reelStyle) ? prior.reelStyle : 'classic');
+    setSessionPhase(prior.sessionPhase === 'sample' ? 'sample' : 'active');
+    setWorkspacePage(['setup','chaos','forge','library'].includes(prior.workspacePage) ? prior.workspacePage : 'library');
+    setIdeas(Storage.loadIdeas());
+    setArchives(Storage.loadDraftArchives());
+    showToast('전체 백업 복원이 완료됐습니다. 기획서와 이전 작업도 복원했어요.');
+    return true;
+  };
+
   const startFresh = () => {
     const shortage = auditDNACoverage(generatorId, dna, custom, {}, {}).empty;
     if (shortage.length) {
@@ -876,6 +926,17 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         </nav>
       </header>
 
+      {backupRecovery === 'failed' && (
+        <div className="wrap v2-restore-warning" role="alert">
+          <strong>⚠ 중단된 데이터 복구가 필요해요.</strong>
+          <p>이전에 시작한 복원을 안전하게 되돌리지 못해 자동 저장을 중지했습니다. 이 브라우저의 데이터를 초기화하지 마세요.</p>
+        </div>
+      )}
+      {backupRecovery === 'recovered' && (
+        <div className="wrap v2-recovery-info" role="status">
+          중단됐던 복원을 감지해 이전 데이터를 복구했습니다.
+        </div>
+      )}
       <main className="wrap v2-wrap" data-screen={workspacePage}>
         <div className="v2-statusbar">
           <span>✦ 현재 작업 · {gen.title} <em>{selectedGenreNames.join(' × ')}</em></span>
@@ -1182,6 +1243,10 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
               <h2 id="libraryTitle">아이디어를 잃지 마세요.</h2>
               <p>저장된 아이디어와 직접 추가한 키워드를 별도 탭으로 관리하세요.</p>
             </div>
+            <WorkspaceBackupPanel
+              currentCounts={{ ideas: ideas.length, custom: custom.length, archives: archives.length }}
+              onBackup={downloadFullBackup} onRestore={restoreFullBackup}
+            />
             <div className="library-switch" role="tablist" aria-label="보관함 카테고리">
               <button type="button" role="tab" aria-selected={libraryTab === 'ideas'}
                 className={`library-switch-tab${libraryTab === 'ideas' ? ' selected' : ''}`}
