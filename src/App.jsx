@@ -132,6 +132,13 @@ function restoreResults(draft, customKeywords) {
  */
 export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   const [draft] = useState(() => Storage.loadDraft());
+  // A first visit displays sample ideas, not a completed generation.
+  // Old drafts without this flag are treated as previously authored work.
+  const [sessionPhase, setSessionPhase] = useState(
+    () => !draft || draft.sessionPhase === 'sample' ? 'sample' : 'restored'
+  );
+  const [confirmNew, setConfirmNew] = useState(false);
+  const [archives, setArchives] = useState(() => Storage.loadDraftArchives());
   const [custom, setCustom] = useState(() => Storage.loadCustom());
   const [results, setResults] = useState(() => restoreResults(draft, Storage.loadCustom()));
   const recentHistoryRef = useRef(restoreRecentHistory(draft));
@@ -199,9 +206,9 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   // 저장된 아이디어와 달리 현재 편집 중인 결과/잠금/옵션은 초안으로 자동 보존한다.
   useEffect(() => {
-    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current });
+    const ok = Storage.saveDraft({ generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres }, chaos, results, reelStyle, workspacePage, forgeDocs, creativeDNA: dna, recentHistory: recentHistoryRef.current, sessionPhase: sessionPhase === 'sample' ? 'sample' : 'active' });
     setDraftSaved(ok);
-  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna]);
+  }, [generatorId, mode, genre, subgenres, chaos, results, reelStyle, workspacePage, forgeDocs, dna, sessionPhase]);
 
   const showToast = useCallback((message) => {
     setToast(message);
@@ -251,7 +258,9 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         ? {...baseDNA, mutation:'rift', novelty:Math.max(3,baseDNA.novelty)}
         : {...baseDNA, mutation:'spark'};
       const target = GENERATOR_MAP[gid];
-      const snapshot = results[gid] ?? { values: {}, locks: {} };
+      const snapshot = options.fresh
+        ? { values: {}, locks: {} }
+        : (results[gid] ?? { values: {}, locks: {} });
       const open = target.slots.filter((slot)=>!snapshot.locks[slot.key]);
       if (target.slots.every((slot) => snapshot.locks[slot.key])) {
         showToast('모든 항목이 잠겨 있어요. 잠금을 하나 이상 해제해 주세요');
@@ -293,7 +302,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
         dna: drawDNA,
         locks: drawLocks,
         values: snapshot.values,
-        recent: recentHistoryRef.current[gid] || {},
+        recent: options.fresh ? {} : (recentHistoryRef.current[gid] || {}),
         previousTopics: Object.values(snapshot.values).flatMap(text=>deriveTopics({t:text}))
       });
       recentHistoryRef.current = nextRecentHistory(
@@ -302,6 +311,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
       // 연출과 무관하게 데이터는 즉시 확정 (연출 중 저장/복사 대비)
       setResults((prev) => ({ ...prev, [gid]: { values: finalValues, locks: snapshot.locks } }));
+      setSessionPhase('active');
       clearAnimations();
 
       const unlocked = target.slots
@@ -381,6 +391,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   );
 
   const reroll = (slotKey) => {
+    setSessionPhase('active');
     if (current.locks[slotKey]) {
       showToast('잠긴 항목은 재추첨되지 않습니다');
       return;
@@ -454,6 +465,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   const toggleLock = (slotKey) => {
     const nextLocked = !current.locks[slotKey];
+    setSessionPhase('active');
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
@@ -466,6 +478,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   };
 
   const updateValue = (slotKey, text) => {
+    setSessionPhase('active');
     setResults((prev) => ({
       ...prev,
       [generatorId]: {
@@ -476,6 +489,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
   };
 
   const unlockAll = () => {
+    setSessionPhase('active');
     setResults((prev) => ({
       ...prev,
       [generatorId]: { values: prev[generatorId].values, locks: {} }
@@ -522,7 +536,89 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     setWorkspacePage('chaos');
     generate();
   };
+
+  /**
+   * All explicit 'new idea' operations preserve a full draft snapshot
+   * BEFORE clearing any current generator output or FORGE writing.
+   * Separate saved ideas, custom keywords and other generators survive.
+   */
+  const snapshotDraft = () => ({
+    generatorId, mode, genre, genreSelection: { main: genre, subs: subgenres },
+    chaos, results, reelStyle, workspacePage, forgeDocs,
+    creativeDNA: dna, recentHistory: recentHistoryRef.current,
+    sessionPhase: 'active'
+  });
+  const startFresh = () => {
+    const shortage = auditDNACoverage(generatorId, dna, custom, {}, {}).empty;
+    if (shortage.length) {
+      showToast('BAN 설정으로 생성할 수 없는 항목: ' + shortage.slice(0, 2).join(' · '));
+      return;
+    }
+    if (sessionPhase !== 'sample') {
+      const currentTitle = String(forgeDocs[generatorId]?.title || '').trim();
+      const saved = Storage.archiveDraft(snapshotDraft(),
+        currentTitle || gen.tab + ' · ' + (current.values[gen.slots[0].key] || '이전 아이디어').slice(0, 48));
+      if (!saved) {
+        showToast('이전 작업을 안전하게 보관하지 못했어요. 새 아이디어를 시작하지 않았습니다.');
+        return;
+      }
+      setArchives(Storage.loadDraftArchives());
+    }
+    clearAnimations();
+    setConfirmNew(false);
+    setTitle('');
+    setMutationMessage('');
+    // Only the current generator's FORGE document is cleared. It is kept in
+    // the archived checkpoint, while docs for other generators remain.
+    setForgeDocs(prev => {
+      const next = { ...prev };
+      delete next[generatorId];
+      return next;
+    });
+    recentHistoryRef.current = {
+      ...recentHistoryRef.current,
+      [generatorId]: Object.fromEntries(gen.slots.map(slot => [slot.key, []]))
+    };
+    setWorkspacePage('chaos');
+    generate({}, { fresh: true });
+  };
+  const restoreArchive = (id) => {
+    const target = Storage.getDraftArchive(id);
+    if (!target) {
+      showToast('저장된 작업 기록을 찾을 수 없어요.');
+      return;
+    }
+    if (sessionPhase !== 'sample') {
+      const saved = Storage.archiveDraft(snapshotDraft(), '돌아가기 전 현재 작업');
+      if (!saved) {
+        showToast('현재 작업을 보관하지 못해 이전 작업으로 전환하지 않았어요.');
+        return;
+      }
+    }
+    const prior = target.draft;
+    const gid = GENERATOR_MAP[prior.generatorId] ? prior.generatorId : 'story';
+    const selection = normalizeGenreSelection(gid, prior.genreSelection || {main:prior.genre,subs:[]});
+    clearAnimations();
+    recentHistoryRef.current = restoreRecentHistory(prior);
+    setGeneratorId(gid);
+    setResults(restoreResults(prior, custom));
+    setMode(MODES.some(m=>m.k===prior.mode)?prior.mode:'hybrid');
+    setGenre(selection.main);
+    setSubgenres(selection.subs);
+    const previousChaos = Number(prior.chaos);
+    setChaos(Number.isInteger(previousChaos) && previousChaos >= 1 && previousChaos <= 5 ? previousChaos : 3);
+    setDNA(normalizeDNA(prior.creativeDNA));
+    setForgeDocs(prior.forgeDocs && typeof prior.forgeDocs==='object' ? prior.forgeDocs : {});
+    setReelStyle(REEL_STYLES.includes(prior.reelStyle) ? prior.reelStyle : 'classic');
+    setSessionPhase('active');
+    setWorkspacePage('chaos');
+    setMutationMessage('');
+    setConfirmNew(false);
+    setArchives(Storage.loadDraftArchives());
+    showToast('이전 작업을 불러왔습니다. 현재 작업도 기록에 보관되어 있어요.');
+  };
   const updateForgeDoc = (field, value) => {
+    setSessionPhase('active');
     setForgeDocs((prev) => ({
       ...prev,
       [generatorId]: { ...(prev[generatorId] || {}), [field]: value }
@@ -531,6 +627,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
 
   const updateForgeField = (fieldId, text) => {
     if (!getForgeFields(generatorId).some((field) => field.id === fieldId)) return;
+    setSessionPhase('active');
     setForgeDocs((prev) => {
       const doc = normalizeForgeDoc(generatorId, prev[generatorId]);
       return {
@@ -702,6 +799,7 @@ export default function App({ animationMs = DEFAULT_ANIMATION_MS }) {
     }
     clearAnimations();
     setSpinText({});
+    setSessionPhase('active');
     setGeneratorId(idea.generator);
     setMode(MODES.some((m) => m.k === idea.mode) ? idea.mode : 'hybrid');
     const restored = normalizeGenreSelection(idea.generator, idea.genres || { main: idea.genre, subs: [] });
